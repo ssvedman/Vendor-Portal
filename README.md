@@ -13,7 +13,7 @@ schedules. Static site (GitHub Pages) backed by Supabase for login, roles, and d
 ## Structure
 - `index.html`, `styles.css`, `app.js` — the site
 - `config.js` — Supabase URL + anon key, roles, divisions, default range
-- `lennar-logo.png` — brand logo / home button
+- `logo.svg` — brand logo / home button / favicon
 
 Division data lives in Supabase, not in this repo. The database schema and
 row-level-security policies are kept out of the public
