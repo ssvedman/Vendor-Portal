@@ -228,3 +228,6 @@ tbody tr.totalrow:hover td{background:#eef4fb}
 .core-ctrl{gap:8px}
 .core-ctrl b{min-width:0}
 .core-ctrl #coreHint{margin-left:-2px}
+
+/* supplier code next to vendor name */
+.sup{color:var(--muted);font-size:12px;font-weight:600;white-space:nowrap}

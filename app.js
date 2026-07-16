@@ -227,6 +227,7 @@ const toolbar = inner => `<div class="toolbar">${inner}</div>`;
 function commId(name){ const c=(state.data.communities||[]).find(x=>x.name===name); return c && c.id ? c.id : null; }
 function shortId(id){ return id ? String(id).replace(/0000$/,"") : id; }
 function commLabel(name){ const id=commId(name); return id ? name+" ("+shortId(id)+")" : name; }
+function supTag(v){ return v && v.supplierCode ? ` <span class="sup">#${esc(v.supplierCode)}</span>` : ""; }
 function rangeCommSet(){ const from=state.range.from, to=state.range.to, s=new Set();
   (state.data.startRecords||[]).forEach(r=>{ if(r.date>=from && r.date<=to) s.add(r.community); }); return s; }
 
@@ -251,9 +252,9 @@ function viewByCommunity(){
     $("commBody").innerHTML=rows.length?`<div class="table-wrap"><table>
       <thead><tr><th>Trade Category</th><th>Trade Partner</th><th>Trade Code</th></tr></thead>
       <tbody>${rows.map(v=>`<tr><td><span class="cat-tag">${esc(v.category||"—")}</span></td>
-        <td>${esc(v.name)}</td><td>${esc(v.tradeCode||"—")}</td></tr>`).join("")}</tbody></table></div>`
+        <td>${esc(v.name)}${supTag(v)}</td><td>${esc(v.tradeCode||"—")}</td></tr>`).join("")}</tbody></table></div>`
       :`<div class="empty">No vendors match.</div>`;
-    window._exp=()=>exportCSV(`${comm}_vendors`,["Category","Trade Partner","Trade Code"],rows.map(v=>[v.category,v.name,v.tradeCode]));
+    window._exp=()=>exportCSV(`${comm}_vendors`,["Category","Trade Partner","Supplier #","Trade Code"],rows.map(v=>[v.category,v.name,v.supplierCode,v.tradeCode]));
   };
   $("commPick").addEventListener("change",render); $("commSearch").addEventListener("input",render);
   $("commExport").addEventListener("click",()=>window._exp()); render();
@@ -267,7 +268,7 @@ function viewByVendor(){
   if(!src.length){ $("viewArea").innerHTML=`<div class="empty">No trade partners active in the selected date range.</div>`; return; }
   const agg=startsAgg(); const monthLabels=agg.months.map(m=>m.label);
   const byComm={}; agg.rows.forEach(r=>byComm[r.community]=r);
-  const label=v=>((v.category||"—")+" — "+v.name);
+  const label=v=>((v.category||"—")+" — "+v.name+(v.supplierCode?"  #"+v.supplierCode:""));
   const allOpts=src.map((v,i)=>({i,text:label(v).toLowerCase()}));
   $("viewArea").innerHTML=`
     ${toolbar(`<input type="text" id="vSearch" placeholder="Filter trade partners…" style="max-width:260px">
@@ -322,11 +323,11 @@ function viewMatrix(){
     const cap=rows.slice(0,250);
     $("mBody").innerHTML=`<table class="matrix"><thead><tr><th class="sticky">Trade Partner</th>${comms.map(c=>`<th class="vhead" title="${esc(commLabel(c.name))}">${esc(c.name)}${c.id?"  ·  "+esc(shortId(c.id)):""}</th>`).join("")}</tr></thead>
       <tbody>${cap.map(v=>{const set=new Set(v.assigned);
-        return `<tr><td class="sticky">${esc(v.name)}<br><span class="cat-tag">${esc(v.category||"")}</span></td>${comms.map(c=>`<td class="cell">${set.has(c.name)?'<span class="x-mark">✓</span>':''}</td>`).join("")}</tr>`;}).join("")}</tbody></table>
+        return `<tr><td class="sticky">${esc(v.name)}${supTag(v)}<br><span class="cat-tag">${esc(v.category||"")}</span></td>${comms.map(c=>`<td class="cell">${set.has(c.name)?'<span class="x-mark">✓</span>':''}</td>`).join("")}</tr>`;}).join("")}</tbody></table>
       ${rows.length>250?`<div class="empty">Showing first 250 of ${rows.length}. Narrow with filters.</div>`:""}`;
     window._expM=()=>exportCSV(`${d.key}_assignment_matrix`,
-      ["Trade Partner","Trade Category",...comms.map(c=>commLabel(c.name))],
-      rows.map(v=>{const set=new Set(v.assigned); return [v.name, v.category||"", ...comms.map(c=>set.has(c.name)?"X":"")];}));
+      ["Trade Partner","Supplier #","Trade Category",...comms.map(c=>commLabel(c.name))],
+      rows.map(v=>{const set=new Set(v.assigned); return [v.name, v.supplierCode||"", v.category||"", ...comms.map(c=>set.has(c.name)?"X":"")];}));
   };
   $("mSearch").addEventListener("input",render); $("mCat").addEventListener("change",render); $("mComm").addEventListener("change",render);
   $("mExport").addEventListener("click",()=>window._expM()); render();
@@ -516,7 +517,7 @@ function setupGlobalSearch(){
     const cats=d.categories.filter(c=>c.toLowerCase().includes(q)).slice(0,6);
     const sect=(title,items)=>items.length?`<div class="gs-sect">${title}</div>`+items:"";
     let html="";
-    html+=sect("Trade Partners", vend.map(v=>`<div class="gs-item" data-t="vendor" data-v="${esc(v.name)}">${esc(v.name)} <span class="cat-tag">${esc(v.category||"")}</span></div>`));
+    html+=sect("Trade Partners", vend.map(v=>`<div class="gs-item" data-t="vendor" data-v="${esc(v.name)}">${esc(v.name)}${supTag(v)} <span class="cat-tag">${esc(v.category||"")}</span></div>`));
     html+=sect("Communities", comm.map(c=>`<div class="gs-item" data-t="community" data-v="${esc(c.name)}">${esc(c.name)}</div>`));
     html+=sect("Trades", cats.map(c=>`<div class="gs-item" data-t="category" data-v="${esc(c)}">${esc(c)}</div>`));
     panel.innerHTML=html||`<div class="gs-sect">No matches</div>`;
@@ -651,10 +652,11 @@ function buildDivision(key, re2wb, startswb){
       const nm=idName[cidNorm]||cleanCommName(S(r["Description"]))||cidNorm;
       commSet.set(cidNorm,nm);
       const gk=cat+"|"+vendor;
-      if(!groups.has(gk)) groups.set(gk,{category:cat,name:vendor,tradeCode:S(r["Trade Code"]),comms:new Set()});
+      if(!groups.has(gk)) groups.set(gk,{category:cat,name:vendor,tradeCode:S(r["Trade Code"]),supplierCode:S(r["Supplier"]),comms:new Set()});
+      if(!groups.get(gk).supplierCode) groups.get(gk).supplierCode=S(r["Supplier"]);
       groups.get(gk).comms.add(nm);
     }
-    vendors=[...groups.values()].map(g=>({category:g.category,billCode:null,tradeCode:g.tradeCode,name:g.name,
+    vendors=[...groups.values()].map(g=>({category:g.category,billCode:null,tradeCode:g.tradeCode,supplierCode:g.supplierCode,name:g.name,
       totalCommunities:g.comms.size,total2026:null,assigned:[...g.comms].sort()}));
     categories=[...new Set(vendors.map(v=>v.category))].sort();
   } else {
