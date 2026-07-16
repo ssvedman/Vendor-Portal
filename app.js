@@ -110,6 +110,7 @@ async function enterApp(email){
   if (entered) return; entered=true;
   state.email=email.toLowerCase();
   const r=resolveRole(state.email); state.role=r.role; state.roleDivs=r.divisions;
+  if(!DEMO && sb){ try{ const {data}=await sb.from("app_roles").select("role,divisions").eq("email",state.email).maybeSingle(); if(data){ state.role=data.role||state.role; state.roleDivs=data.divisions||state.roleDivs; } }catch(e){} }
   $("auth").classList.add("hidden"); $("app").classList.remove("hidden");
   $("userChip").innerHTML = esc(state.email)+` <span class="role-tag">${esc(state.role)}</span>`;
   if (DEMO) $("appDemoPill").classList.remove("hidden");
@@ -548,7 +549,85 @@ function exportCSV(name,headers,rows){
 /* ---------------- ADMIN ---------------- */
 function showAdmin(){ if(!canUploadAny()) return;
   $("dashboard").classList.add("hidden"); $("admin").classList.remove("hidden");
-  $("adminLink").classList.add("hidden"); $("dashLink").classList.remove("hidden"); }
+  $("adminLink").classList.add("hidden"); $("dashLink").classList.remove("hidden");
+  renderPerms(); }
+
+/* ---------------- Access & permissions (admin only) ---------------- */
+function renderPerms(){
+  const p=$("permsPanel");
+  if(!isAdmin()){ p.classList.add("hidden"); return; }
+  p.classList.remove("hidden");
+  const divChecks=CFG.DIVISIONS.map(d=>`<label class="permchk"><input type="checkbox" value="${d.key}" class="permDiv"> ${esc(d.label)}</label>`).join("");
+  p.innerHTML=`<div class="panel"><div class="panel-h">Access &amp; permissions</div>
+    <div style="padding:16px">
+      <p class="tiny" style="margin:0 0 12px">Everyone at ${esc(CFG.ALLOWED_DOMAIN)} can view. Grant <b>editor</b> (upload for chosen divisions) or <b>admin</b> (full access) below.</p>
+      <div class="permform">
+        <input type="email" id="permEmail" placeholder="user@lennar.com">
+        <select id="permRole"><option value="viewer">viewer</option><option value="editor">editor</option><option value="admin">admin</option></select>
+        <span id="permDivs" class="permdivs">${divChecks}</span>
+        <button class="btn mini" id="permSave">Save user</button>
+      </div>
+      <div id="permMsg" class="msg"></div>
+      <div class="table-wrap" id="permList"></div>
+    </div></div>`;
+  const toggleDivs=()=>{ $("permDivs").style.display = $("permRole").value==="editor" ? "inline-flex":"none"; };
+  $("permRole").addEventListener("change",toggleDivs); toggleDivs();
+  $("permSave").addEventListener("click",savePerm);
+  loadPermList();
+}
+function permMsg(t,k){ const m=$("permMsg"); if(m){ m.className="msg "+(k||"info"); m.textContent=t; } }
+function permTable(rows){
+  if(!rows.length) return `<div class="empty">No explicit roles yet — everyone at ${esc(CFG.ALLOWED_DOMAIN)} is a viewer.</div>`;
+  const dl=k=>(CFG.DIVISIONS.find(d=>d.key===k)||{}).label||k;
+  return `<table><thead><tr><th>Email</th><th>Role</th><th>Divisions</th><th></th></tr></thead><tbody>${
+    rows.map(r=>`<tr><td>${esc(r.email)}</td><td><span class="role-tag">${esc(r.role)}</span></td>
+      <td>${(r.divisions&&r.divisions.length)? r.divisions.map(k=>`<span class="chip">${esc(dl(k))}</span>`).join("") : (r.role==="admin"?'<span class="cat-tag">all</span>':'—')}</td>
+      <td class="num">${DEMO?"":`<button class="linkbtn permEdit" data-email="${esc(r.email)}" data-role="${esc(r.role)}" data-divisions="${esc((r.divisions||[]).join(','))}">Edit</button> <button class="linkbtn permDel" data-email="${esc(r.email)}">Remove</button>`}</td></tr>`).join("")
+  }</tbody></table>`;
+}
+async function loadPermList(){
+  const list=$("permList"); if(!list) return;
+  if(DEMO){
+    const rows=Object.entries(CFG.ROLES).map(([email,r])=>({email,role:r.role,divisions:r.divisions||[]}));
+    list.innerHTML=permTable(rows)+`<p class="tiny">Demo mode: this list comes from config.js and is read-only. Connect Supabase to manage users here.</p>`;
+    return;
+  }
+  try{
+    const {data,error}=await sb.from("app_roles").select("email,role,divisions").order("email");
+    if(error) throw error;
+    list.innerHTML=permTable(data);
+    list.querySelectorAll(".permEdit").forEach(b=>b.addEventListener("click",()=>fillPermForm(b.dataset)));
+    list.querySelectorAll(".permDel").forEach(b=>b.addEventListener("click",()=>delPerm(b.dataset.email)));
+  }catch(e){ list.innerHTML=`<div class="empty">Could not load users: ${esc(e.message)}</div>`; }
+}
+function fillPermForm(ds){
+  $("permEmail").value=ds.email; $("permRole").value=ds.role;
+  const divs=(ds.divisions||"").split(",").filter(Boolean);
+  $("permDivs").querySelectorAll(".permDiv").forEach(c=>{ c.checked=divs.includes(c.value); });
+  $("permRole").dispatchEvent(new Event("change"));
+}
+async function savePerm(){
+  const email=$("permEmail").value.trim().toLowerCase();
+  const role=$("permRole").value;
+  const divisions=role==="editor" ? [...$("permDivs").querySelectorAll(".permDiv:checked")].map(c=>c.value) : [];
+  if(!email || !email.endsWith(CFG.ALLOWED_DOMAIN)) return permMsg("Email must be a "+CFG.ALLOWED_DOMAIN+" address.","err");
+  if(email===state.email && role!=="admin") return permMsg("You can't remove your own admin access.","err");
+  if(role==="editor" && !divisions.length) return permMsg("Pick at least one division for an editor.","err");
+  if(DEMO) return permMsg("Demo mode: connect Supabase to save users (or edit config.js ROLES).","info");
+  try{
+    const {error}=await sb.from("app_roles").upsert({email,role,divisions},{onConflict:"email"}); if(error) throw error;
+    permMsg(`Saved ${email} as ${role}${divisions.length?" ("+divisions.join(", ")+")":""}.`,"ok");
+    $("permEmail").value=""; loadPermList();
+  }catch(e){ permMsg("Save failed: "+e.message,"err"); }
+}
+async function delPerm(email){
+  if(email===state.email) return permMsg("You can't remove your own access.","err");
+  if(DEMO) return permMsg("Demo mode: connect Supabase to manage users.","info");
+  try{
+    const {error}=await sb.from("app_roles").delete().eq("email",email); if(error) throw error;
+    permMsg(`Removed ${email} — now a default viewer.`,"ok"); loadPermList();
+  }catch(e){ permMsg("Remove failed: "+e.message,"err"); }
+}
 function showDashboard(){ $("admin").classList.add("hidden"); $("dashboard").classList.remove("hidden");
   $("dashLink").classList.add("hidden"); if(canUploadAny()) $("adminLink").classList.remove("hidden"); }
 
@@ -714,3 +793,4 @@ async function publish(parsed,key){
 }
 
 checkExistingSession();
+/* v: permissions editor */
