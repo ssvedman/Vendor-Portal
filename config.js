@@ -22,8 +22,7 @@ window.APP_CONFIG = {
   },
   DEFAULT_ROLE: "viewer",
 
-  // Divisions in the dropdown. `key` maps to /data/<key>.json (demo) or the
-  // `key` column in Supabase (live).
+  // Divisions in the dropdown.
   DIVISIONS: [
     { key: "tampa",   label: "Tampa",   code: "TPU" },
     { key: "orlando", label: "Orlando", code: "OLH" }
@@ -32,6 +31,10 @@ window.APP_CONFIG = {
   // Default date range for displayed (starts) data = current calendar year.
   DEFAULT_RANGE: (() => { const y = new Date().getFullYear();
     return { from: y + "-01-01", to: y + "-12-31" }; })(),
+
+  // Anti-abuse: per-browser limits on requesting a login code (protects your
+  // email provider quota). The authoritative cap is Supabase Auth > Rate Limits.
+  OTP_LIMITS: { cooldownSec: 45, perHour: 5, perDay: 15 },
 
   // Demo verification code used only when Supabase is not configured.
   DEMO_CODE: "123456"

@@ -16,5 +16,5 @@ schedules. Static site (GitHub Pages) backed by Supabase for login, roles, and d
 - `lennar-logo.png` — brand logo / home button
 
 Division data lives in Supabase, not in this repo. The database schema and
-row-level-security policies (`supabase_setup.sql`) are kept out of the public
+row-level-security policies are kept out of the public
 repo and already applied to the Supabase project.

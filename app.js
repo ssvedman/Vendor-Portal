@@ -50,20 +50,40 @@ $("verifyBtn").addEventListener("click", verifyCode);
 $("code").addEventListener("keydown", e=>{ if(e.key==="Enter") verifyCode(); });
 $("backBtn").addEventListener("click", ()=>{ $("stepCode").classList.add("hidden"); $("stepEmail").classList.remove("hidden"); clearAuth(); });
 
+// ---- anti-abuse: throttle login-code requests per browser ----
+function otpHistory(){ try{ return JSON.parse(localStorage.getItem("vp_otp_sends")||"[]"); }catch(e){ return []; } }
+function otpRecord(){ const h=otpHistory(); h.push(Date.now()); try{ localStorage.setItem("vp_otp_sends",JSON.stringify(h.slice(-50))); }catch(e){} }
+function otpGate(){
+  const L=CFG.OTP_LIMITS||{cooldownSec:45,perHour:5,perDay:15};
+  const now=Date.now(), h=otpHistory(), last=h[h.length-1];
+  if(last && now-last < L.cooldownSec*1000) return {ok:false,msg:`Please wait ${Math.ceil((L.cooldownSec*1000-(now-last))/1000)}s before requesting another code.`};
+  if(h.filter(t=>now-t<3600000).length >= L.perHour) return {ok:false,msg:"Too many code requests this hour — please try again later."};
+  if(h.filter(t=>now-t<86400000).length >= L.perDay) return {ok:false,msg:"Daily code-request limit reached — please try again tomorrow."};
+  return {ok:true};
+}
+function startCooldown(){
+  const L=CFG.OTP_LIMITS||{}; let s=L.cooldownSec||45; const btn=$("sendBtn");
+  btn.disabled=true; btn.textContent=`Resend in ${s}s`;
+  clearInterval(window._cdT); window._cdT=setInterval(()=>{ s--;
+    if(s<=0){ clearInterval(window._cdT); btn.disabled=false; btn.textContent="Send verification code"; }
+    else btn.textContent=`Resend in ${s}s`; },1000);
+}
 async function sendCode(){
   const email = $("email").value.trim().toLowerCase();
   clearAuth();
   if (!email || !email.includes("@")) return authMsg("Please enter your email address.","err");
   if (!email.endsWith(CFG.ALLOWED_DOMAIN)) return authMsg("Access is limited to "+CFG.ALLOWED_DOMAIN+" email addresses.","err");
+  const gate=otpGate(); if(!gate.ok) return authMsg(gate.msg,"err");
   $("sendBtn").disabled=true; $("sendBtn").textContent="Sending…";
   try {
     if (DEMO){ await new Promise(r=>setTimeout(r,400)); authMsg("Demo mode: enter code "+CFG.DEMO_CODE+" to continue.","info"); }
     else { const {error}=await sb.auth.signInWithOtp({email,options:{shouldCreateUser:true}}); if(error) throw error;
            authMsg("Code sent. Check your inbox (and spam).","ok"); }
+    otpRecord();
     state.email=email; $("sentTo").textContent=email;
     $("stepEmail").classList.add("hidden"); $("stepCode").classList.remove("hidden"); $("code").focus();
-  } catch(e){ authMsg(prettyErr(e,"Could not send the code."),"err"); }
-  finally { $("sendBtn").disabled=false; $("sendBtn").textContent="Send verification code"; }
+    startCooldown();
+  } catch(e){ authMsg(prettyErr(e,"Could not send the code."),"err"); $("sendBtn").disabled=false; $("sendBtn").textContent="Send verification code"; }
 }
 async function verifyCode(){
   const code=$("code").value.trim(); clearAuth();
