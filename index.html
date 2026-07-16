@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lennar Vendor Assignments Portal</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ===================== AUTH ===================== -->
+<div id="auth">
+  <div class="auth-card">
+    <div class="brand"><img class="auth-logo" src="lennar-logo.png" alt="Lennar">
+      <h1>Vendor Assignments <span id="demoPill" class="demo-pill hidden">DEMO</span></h1></div>
+    <p class="auth-sub">Sign in with your Lennar email to view division vendor assignments.</p>
+    <div id="stepEmail">
+      <label class="fld" for="email">Work email</label>
+      <input type="email" id="email" placeholder="you@lennar.com" autocomplete="email">
+      <button class="btn" id="sendBtn">Send verification code</button>
+    </div>
+    <div id="stepCode" class="hidden">
+      <label class="fld" for="code">Enter the code sent to <span id="sentTo"></span></label>
+      <input type="text" id="code" class="code-input" inputmode="numeric" maxlength="10" placeholder="Enter code">
+      <button class="btn" id="verifyBtn">Verify &amp; sign in</button>
+      <button class="btn ghost" id="backBtn" style="margin-top:10px">Use a different email</button>
+    </div>
+    <div id="authMsg" class="msg"></div>
+    <p class="tiny">Access limited to Lennar associates.</p>
+  </div>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div id="app" class="hidden">
+  <header class="topbar">
+    <div class="topbar-in">
+      <button class="home-logo" id="homeLogo" title="Home"><img src="lennar-logo.png" alt="Lennar — home"></button>
+      <span class="title">Vendor Assignments</span>
+      <select id="divisionSel"></select>
+      <span id="appDemoPill" class="demo-pill hidden">DEMO</span>
+      <div class="gs-wrap">
+        <input type="text" id="globalSearch" placeholder="Search vendors, communities, trades…">
+        <div id="gsResults" class="gs-results hidden"></div>
+      </div>
+      <div class="spacer"></div>
+      <span class="user-chip" id="userChip"></span>
+      <button class="linkbtn" id="printBtn">Print / PDF</button>
+      <button class="linkbtn hidden" id="adminLink">Admin</button>
+      <button class="linkbtn hidden" id="dashLink">← Dashboard</button>
+      <button class="linkbtn" id="logoutBtn">Sign out</button>
+    </div>
+    <div class="subbar">
+      <div id="banner" class="banner"></div>
+      <div class="range-ctrl">
+        <label>From <input type="date" id="fromDate"></label>
+        <label>To <input type="date" id="toDate"></label>
+        <button class="btn mini ghost" id="rangeReset">Reset to year</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="dashboard">
+      <div class="kpis" id="kpis"></div>
+      <div class="tabs">
+        <button class="tab active" data-view="community">By Community</button>
+        <button class="tab" data-view="vendor">By Vendor</button>
+        <button class="tab" data-view="matrix">Full Matrix</button>
+        <button class="tab" data-view="coverage">Coverage Gaps</button>
+        <button class="tab" data-view="starts">Starts</button>
+      </div>
+      <div id="viewArea"></div>
+    </section>
+
+    <section id="admin" class="hidden">
+      <h2 style="color:var(--navy)">Admin — Update Division Data</h2>
+      <p style="color:var(--muted);max-width:720px">Upload the raw exports for a division. <b>Vendor assignments</b> come from the RE2 export (e.g. <i>Book1.xlsx</i>); <b>starts</b> come from the division's start log/schedule. Publishing performs a full replace of that division.</p>
+      <div class="admin-grid">
+        <div class="panel"><div class="panel-h">1. Division</div>
+          <div style="padding:16px"><select id="adminDiv"></select></div></div>
+        <div class="panel"><div class="panel-h">2. Vendor assignments (RE2 export)</div>
+          <div style="padding:16px">
+            <button class="btn mini ghost" id="pickRe2">Choose RE2 .xlsx</button>
+            <input type="file" id="re2Input" accept=".xlsx,.xlsm" class="hidden">
+            <span class="fileok" id="re2Name"></span></div></div>
+        <div class="panel"><div class="panel-h">3. Starts (start log / schedule)</div>
+          <div style="padding:16px">
+            <button class="btn mini ghost" id="pickStarts">Choose starts .xlsx</button>
+            <input type="file" id="startsInput" accept=".xlsx,.xlsm" class="hidden">
+            <span class="fileok" id="startsName"></span></div></div>
+        <div class="panel hidden" id="previewPanel"><div class="panel-h">4. Preview &amp; publish</div>
+          <div style="padding:16px" id="previewBody"></div></div>
+        <div id="adminMsg" class="msg"></div>
+        <div><button class="btn mini ghost" id="historyBtn">View change history →</button></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
