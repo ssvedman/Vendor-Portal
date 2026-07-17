@@ -302,6 +302,7 @@ tbody tr.totalrow:hover td{background:#eef4fb}
 .admin-layout .admin-grid{max-width:none}
 @media (max-width:900px){ .admin-layout{grid-template-columns:1fr} }
 .admin-side{display:flex;flex-direction:column;gap:16px}
+#adminDiv{width:100%;margin-bottom:14px;padding:9px 12px;border:1.5px solid var(--line);border-radius:9px;font-size:14px;font-weight:600;color:var(--navy);background:var(--card)}
 .uptiles{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
 .uptile{border:2px dashed var(--line);border-radius:12px;padding:18px 14px;text-align:center;cursor:pointer;background:var(--card);transition:border-color .15s,background .15s}
 .uptile:hover,.uptile.drag{border-color:var(--blue);background:var(--blue-050)}
@@ -326,6 +327,7 @@ tbody tr.totalrow:hover td{background:#eef4fb}
   --bg:#0e141d; --card:#19212e; --blue:#5aa0f0; --blue-600:#79b3f6; --blue-050:#18293f;
   --good:#3ecb86; --warn:#e0a44a;
   --shadow:0 1px 3px rgba(0,0,0,.5),0 8px 24px rgba(0,0,0,.4);
+  color-scheme:dark;
 }
 [data-theme="dark"] .auth-card,
 [data-theme="dark"] header.topbar,
