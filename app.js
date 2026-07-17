@@ -486,16 +486,20 @@ function viewCoverage(){
     $("coreHint").textContent=`= core trade in ≥ ${Math.max(1,Math.ceil(total*pct/100))} of ${total} active communities`; });
   cs.addEventListener("change",()=>{ state.coreFrac=(+cs.value)/100; viewCoverage(); });
   if(coverageMode==="community") coverageByCommunity(d,active,coreCats,byCat);
-  else coverageByTrade(d,rowsAll,total);
+  else coverageByTrade(d,rowsAll,total,byCat,active);
 }
 
-function coverageByTrade(d,rowsAll,total){
+function coverageByTrade(d,rowsAll,total,byCat,active){
   $("covContent").innerHTML=`
     ${toolbar(`<input type="text" id="cgSearch" placeholder="Filter trade…">
-      <select id="cgFilter"><option value="risk">Risks only (single-source or gaps)</option><option value="all">All trades</option>
+      <select id="cgFilter"><option value="risk">All Risks</option><option value="all">All trades</option>
         <option value="single">Single-source only</option><option value="core">Core trades only</option></select>
       <button class="btn mini ghost" id="cgExport">Export CSV</button><span class="count" id="cgCount"></span>`)}
-    <div class="panel"><div class="table-wrap" id="cgBody"></div></div>`;
+    <div id="cgBody"></div>`;
+  const riskTag=r=> r.risk==="single-source"?'<span class="risk risk-s">Single-source</span>'
+    : r.risk==="gaps"?'<span class="risk risk-g">Gaps</span>'
+    : r.risk==="limited"?'<span class="risk risk-l">Limited</span>'
+    : '<span class="risk risk-ok">OK</span>';
   const render=()=>{
     const q=$("cgSearch").value.trim().toLowerCase(), f=$("cgFilter").value;
     let rows=rowsAll.slice();
@@ -505,19 +509,25 @@ function coverageByTrade(d,rowsAll,total){
     if(q) rows=rows.filter(r=>r.cat.toLowerCase().includes(q));
     rows.sort((a,b)=>(b.core-a.core)||b.missing.length-a.missing.length || a.cat.localeCompare(b.cat));
     $("cgCount").textContent=`${rows.length} trades`;
-    const riskTag=r=> r.risk==="single-source"?'<span class="risk risk-s">Single-source</span>'
-      : r.risk==="gaps"?'<span class="risk risk-g">Gaps</span>'
-      : r.risk==="limited"?'<span class="risk risk-l">Limited</span>'
-      : '<span class="risk risk-ok">OK</span>';
-    $("cgBody").innerHTML=`<table><thead><tr><th>Trade Category</th><th class="num">Vendors</th><th class="num">Coverage</th><th>Status</th><th>Missing communities</th></tr></thead>
-      <tbody>${rows.map(r=>`<tr>
-        <td>${esc(r.cat)}${r.core?' <span class="cat-tag">core</span>':''}</td><td class="num">${r.vendors}</td>
-        <td class="num">${r.covered}/${total}</td>
-        <td>${riskTag(r)}</td>
-        <td>${r.missing.length? r.missing.slice(0,8).map(c=>`<span class="chip warn-chip">${esc(commLabel(c))}</span>`).join("")+(r.missing.length>8?`<span class="cat-tag">+${r.missing.length-8}</span>`:"") : '<span class="cat-tag">full coverage</span>'}</td>
-      </tr>`).join("")}</tbody></table>`;
-    window._exp=()=>exportCSV(`${d.key}_coverage_by_trade`,["Trade","Core","Vendors","Covered","Total","Status","Missing communities"],
-      rows.map(r=>[r.cat,r.core?"yes":"no",r.vendors,r.covered,total,r.risk,r.missing.join("; ")]));
+    $("cgBody").innerHTML=rows.length? rows.map((r,i)=>{
+      const vendors=byCat[r.cat]?[...byCat[r.cat].vendors].sort():[];
+      const covered=byCat[r.cat]?active.filter(c=>byCat[r.cat].comms.has(c)):[];
+      return `<div class="acc">
+        <button class="acc-head" data-i="${i}">
+          <span class="acc-title">${esc(r.cat)}${r.core?' <span class="cat-tag">core</span>':''}</span>
+          <span class="acc-meta">${r.vendors} vendor${r.vendors===1?'':'s'} &middot; ${r.covered}/${total} covered</span>
+          ${riskTag(r)}
+          <span class="acc-count ${r.missing.length?'has-gaps':'no-gaps'}">${r.missing.length} missing</span>
+        </button>
+        <div class="acc-body hidden" id="cgd-${i}">
+          <div class="chg-sec"><div class="chg-sec-h">Trade partners (${vendors.length})</div>${vendors.map(v=>`<span class="chip">${esc(v)}</span>`).join("")||'<span class="tiny">no vendors</span>'}</div>
+          <div class="chg-sec"><div class="chg-sec-h">Missing communities (${r.missing.length})</div>${r.missing.length? r.missing.map(c=>`<span class="chip warn-chip">${esc(commLabel(c))}</span>`).join("") : '<span class="cat-tag">full coverage</span>'}</div>
+          <div class="chg-sec"><div class="chg-sec-h">Covered communities (${covered.length})</div>${covered.length? covered.map(c=>`<span class="chip">${esc(commLabel(c))}</span>`).join("") : '<span class="tiny">none</span>'}</div>
+        </div>
+      </div>`; }).join("") : `<div class="empty">No trades match.</div>`;
+    $("cgBody").querySelectorAll(".acc-head").forEach(b=>b.addEventListener("click",()=>{ $("cgd-"+b.dataset.i).classList.toggle("hidden"); b.classList.toggle("open"); }));
+    window._exp=()=>exportCSV(`${d.key}_coverage_by_trade`,["Trade","Core","Vendors","Trade partners","Covered","Total","Status","Missing communities"],
+      rows.map(r=>{const vs=byCat[r.cat]?[...byCat[r.cat].vendors].sort():[]; return [r.cat,r.core?"yes":"no",r.vendors,vs.join("; "),r.covered,total,r.risk,r.missing.join("; ")];}));
   };
   $("cgSearch").addEventListener("input",render); $("cgFilter").addEventListener("change",render);
   $("cgExport").addEventListener("click",()=>window._exp()); render();
@@ -534,9 +544,10 @@ function coverageByCommunity(d,active,coreCats,byCat){
   const render=()=>{
     const q=$("ccSearch").value.trim().toLowerCase(), f=$("ccFilter").value;
     let rows=commRows.slice();
-    if(f==="gaps") rows=rows.filter(r=>r.gaps>0);
+    if(f!=="all") rows=rows.filter(r=>r.gaps>0);
     if(q) rows=rows.filter(r=>r.community.toLowerCase().includes(q));
-    rows.sort((a,b)=>b.gaps-a.gaps || a.community.localeCompare(b.community));
+    if(f==="all") rows.sort((a,b)=>a.community.localeCompare(b.community));
+    else rows.sort((a,b)=>b.gaps-a.gaps || a.community.localeCompare(b.community));
     $("ccCount").textContent=`${rows.length} communities`;
     $("ccBody").innerHTML=rows.length?rows.map((r,i)=>`
       <div class="acc">

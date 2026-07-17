@@ -193,6 +193,8 @@ canvas{max-width:100%}
 .acc-head.open::before{transform:rotate(90deg)}
 .acc-title{font-weight:600;color:var(--navy);flex:1}
 .acc-count{font-size:12.5px;font-weight:700;padding:3px 10px;border-radius:20px;flex:0 0 auto}
+.acc-meta{font-size:12px;color:var(--muted);flex:0 0 auto}
+@media (max-width:640px){ .acc-meta{display:none} }
 .acc-count.has-gaps{background:#fff2df;color:var(--warn)}
 .acc-count.no-gaps{background:#e7f4ec;color:var(--good)}
 .acc-body{padding:12px 16px 14px;border-top:1px solid var(--line)}
