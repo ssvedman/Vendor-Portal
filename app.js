@@ -116,6 +116,10 @@ async function enterApp(email){
   if (DEMO) $("appDemoPill").classList.remove("hidden");
   if (canUploadAny()) $("adminLink").classList.remove("hidden");
 
+  const prefs=loadPrefs();
+  if(prefs.from && prefs.to && prefs.from<=prefs.to) state.range={from:prefs.from,to:prefs.to};
+  if(prefs.view) state.view=prefs.view;
+
   const sel=$("divisionSel");
   sel.innerHTML=CFG.DIVISIONS.map(d=>`<option value="${d.key}">${esc(d.label)}</option>`).join("");
   sel.addEventListener("change",()=>loadDivision(sel.value));
@@ -124,12 +128,13 @@ async function enterApp(email){
   $("fromDate").value=state.range.from; $("toDate").value=state.range.to;
   ["change","input"].forEach(ev=>{ $("fromDate").addEventListener(ev,onRange); $("toDate").addEventListener(ev,onRange); });
   $("rangeReset").addEventListener("click",()=>{ state.range={...CFG.DEFAULT_RANGE};
-    $("fromDate").value=state.range.from; $("toDate").value=state.range.to; renderAll(); });
+    $("fromDate").value=state.range.from; $("toDate").value=state.range.to; savePrefs(); renderAll(); });
 
   // tabs
   document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
     document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
-    t.classList.add("active"); state.view=t.dataset.view; renderView(); }));
+    t.classList.add("active"); state.view=t.dataset.view; savePrefs(); renderView(); }));
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.view===state.view));
 
   $("logoutBtn").addEventListener("click",logout);
   $("adminLink").addEventListener("click",showAdmin);
@@ -138,23 +143,29 @@ async function enterApp(email){
   $("homeLogo").addEventListener("click",()=>{ showDashboard(); activateTab("community"); state.view="community"; renderView(); });
   setupGlobalSearch();
   initAdmin();
-  await loadDivision(CFG.DIVISIONS[0].key);
+  const startKey=(prefs.divKey && CFG.DIVISIONS.some(d=>d.key===prefs.divKey)) ? prefs.divKey : CFG.DIVISIONS[0].key;
+  sel.value=startKey;
+  await loadDivision(startKey);
 }
 function onRange(){
   const f=$("fromDate").value, t=$("toDate").value;
-  if (f&&t&&f<=t){ state.range={from:f,to:t}; renderAll(); }
+  if (f&&t&&f<=t){ state.range={from:f,to:t}; savePrefs(); renderAll(); }
 }
 
 async function loadDivision(key){
-  state.divKey=key;
-  if (state.cache[key]){ state.data=state.cache[key]; renderAll(); return; }
+  state.divKey=key; savePrefs();
   $("viewArea").innerHTML=`<div class="empty">Loading…</div>`;
   try {
-    let data;
-    if (DEMO){ const res=await fetch(`data/${key}.json`); if(!res.ok) throw new Error("Data file not found"); data=await res.json(); }
-    else { const {data:row,error}=await sb.from("division_data").select("payload,updated_at,updated_by").eq("key",key).single();
-           if(error) throw error; data=row.payload; data._updated=row.updated_at; data._by=row.updated_by; }
-    state.cache[key]=data; state.data=data; renderAll();
+    if (state.cache[key]){ state.data=state.cache[key]; }
+    else {
+      let data;
+      if (DEMO){ const res=await fetch(`data/${key}.json`); if(!res.ok) throw new Error("Data file not found"); data=await res.json(); }
+      else { const {data:row,error}=await sb.from("division_data").select("payload,updated_at,updated_by").eq("key",key).single();
+             if(error) throw error; data=row.payload; data._updated=row.updated_at; data._by=row.updated_by; }
+      state.cache[key]=data; state.data=data;
+    }
+    await loadChanges(key);
+    renderAll();
   } catch(e){ $("viewArea").innerHTML=`<div class="empty">Could not load ${esc(key)}: ${esc(e.message)}</div>`; }
 }
 
@@ -191,12 +202,48 @@ function startsAgg(){
 /* ---------------- BANNER ---------------- */
 function renderBanner(){
   const d=state.data;
-  const when = d._updated ? new Date(d._updated).toLocaleString() : "bundled data (not yet published to backend)";
+  const when = d._updated ? new Date(d._updated).toLocaleString() : "not yet published";
   const by = d._by ? " by "+esc(d._by) : "";
-  const span = d.startsDateRange ? ` • starts data spans ${d.startsDateRange.min} → ${d.startsDateRange.max}` : "";
-  $("banner").innerHTML = `<b>${esc(d.division)}</b> — last updated: ${esc(when)}${by}${span}
-    <span class="range-note">Showing communities active ${state.range.from} → ${state.range.to}</span>`;
+  const unread = changesUnread();
+  $("banner").innerHTML = `<b>${esc(d.division)}</b> — last updated: ${esc(when)}${by}`
+    + ` <button class="linkbtn changesBtn${unread?' has-changes':''}" id="changesBtn">View changes${unread?'<span class="notif-dot" aria-label="major change"></span>':''}</button>`;
+  const b=$("changesBtn"); if(b) b.addEventListener("click",openChanges);
 }
+function loadPrefs(){ try{ return JSON.parse(localStorage.getItem("vp_prefs")||"{}"); }catch(e){ return {}; } }
+function savePrefs(){ try{ localStorage.setItem("vp_prefs",JSON.stringify({divKey:state.divKey,from:state.range.from,to:state.range.to,view:state.view})); }catch(e){} }
+async function loadChanges(key){
+  state.changes=[];
+  if(DEMO||!sb) return;
+  try{ const {data}=await sb.from("change_log").select("id,actor,summary,created_at").eq("key",key).order("created_at",{ascending:false}).limit(100); state.changes=data||[]; }catch(e){ state.changes=[]; }
+}
+function latestMajorChange(){ const c=(state.changes||[])[0]; if(!c||!c.summary) return null; return ((c.summary.commsAdded||0)>0||(c.summary.commsRemoved||0)>0)?c:null; }
+function changesUnread(){ const c=latestMajorChange(); if(!c) return false; try{ return String(localStorage.getItem("vp_seen_change_"+state.divKey))!==String(c.id); }catch(e){ return true; } }
+function openChanges(){
+  const c=latestMajorChange(); if(c){ try{ localStorage.setItem("vp_seen_change_"+state.divKey,String(c.id)); }catch(e){} }
+  const rows=state.changes||[]; const num=v=>fmt(v||0);
+  const body = rows.length ? rows.map(r=>{ const s=r.summary||{};
+      const add=Array.isArray(s.commsAddedList)?s.commsAddedList:[], rem=Array.isArray(s.commsRemovedList)?s.commsRemovedList:[];
+      const major=(s.commsAdded||0)>0||(s.commsRemoved||0)>0; const aA=s.assignmentsAdded, aR=s.assignmentsRemoved;
+      return `<div class="chg${major?' chg-major':''}">
+        <div class="chg-head"><b>${new Date(r.created_at).toLocaleString()}</b> <span class="chg-by">${esc(r.actor||"")}</span></div>
+        ${(s.commsAdded||0)?`<div class="chg-line"><span class="chip good-chip">+${num(s.commsAdded)} communities</span>${add.map(x=>`<span class="chip">${esc(x)}</span>`).join("")}${s.commsAdded>add.length?`<span class="cat-tag">+${num(s.commsAdded-add.length)} more</span>`:""}</div>`:""}
+        ${(s.commsRemoved||0)?`<div class="chg-line"><span class="chip bad-chip">-${num(s.commsRemoved)} communities</span>${rem.map(x=>`<span class="chip warn-chip">${esc(x)}</span>`).join("")}${s.commsRemoved>rem.length?`<span class="cat-tag">+${num(s.commsRemoved-rem.length)} more</span>`:""}</div>`:""}
+        <div class="chg-meta">Trade assignments: ${aA!=null?`+${num(aA)} / -${num(aR)}`:`net ${(s.assignDelta>=0?"+":"")+num(s.assignDelta)}`} &middot; vendors +${num(s.vendorsAdded)}/-${num(s.vendorsRemoved)}</div>
+      </div>`; }).join("")
+    : `<div class="empty">No updates recorded yet${DEMO?" (demo mode — change history needs the backend)":""}.</div>`;
+  showModal("Change history &mdash; "+esc(state.data.division), body); renderBanner();
+}
+function showModal(title, html){
+  closeModal();
+  const ov=document.createElement("div"); ov.id="vpModal"; ov.className="modal-ov";
+  ov.innerHTML=`<div class="modal-card"><div class="modal-h"><span>${title}</span><button class="linkbtn" id="modalX" aria-label="Close">&times;</button></div><div class="modal-body">${html}</div></div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener("click",e=>{ if(e.target===ov) closeModal(); });
+  document.addEventListener("keydown",escClose);
+  $("modalX").addEventListener("click",closeModal);
+}
+function escClose(e){ if(e.key==="Escape") closeModal(); }
+function closeModal(){ const m=$("vpModal"); if(m) m.remove(); document.removeEventListener("keydown",escClose); }
 
 /* ---------------- KPIs ---------------- */
 function activeCommunities(){ // communities that have >=1 vendor assignment
@@ -770,13 +817,19 @@ function xlDate(v){
 
 /* Diff for change log */
 function diffPayload(prev,next){
-  const pv=new Set((prev&&prev.vendors||[]).map(v=>v.name)), nv=new Set(next.vendors.map(v=>v.name));
-  const pc=new Set((prev&&prev.communities||[]).map(c=>c.name)), nc=new Set(next.communities.map(c=>c.name));
-  const pa=(prev&&prev.vendors||[]).reduce((s,v)=>s+v.assigned.length,0);
-  const na=next.vendors.reduce((s,v)=>s+v.assigned.length,0);
-  const diff=(A,B)=>[...B].filter(x=>!A.has(x)).length;
-  return {vendors:nv.size,communities:nc.size,vendorsAdded:diff(pv,nv),vendorsRemoved:diff(nv,pv),
-          commsAdded:diff(pc,nc),commsRemoved:diff(nc,pc),assignDelta:na-pa};
+  const names=arr=>new Set((arr||[]).map(x=>x.name));
+  const pv=names(prev&&prev.vendors), nv=names(next.vendors);
+  const pc=names(prev&&prev.communities), nc=names(next.communities);
+  const pairs=vs=>{ const s=new Set(); (vs||[]).forEach(v=>(v.assigned||[]).forEach(c=>s.add(v.name+"|"+c))); return s; };
+  const pp=pairs(prev&&prev.vendors), np=pairs(next.vendors);
+  const added=(A,B)=>[...B].filter(x=>!A.has(x));
+  const cAdd=added(pc,nc), cRem=added(nc,pc);
+  return {vendors:nv.size, communities:nc.size,
+    vendorsAdded:added(pv,nv).length, vendorsRemoved:added(nv,pv).length,
+    commsAdded:cAdd.length, commsRemoved:cRem.length,
+    commsAddedList:cAdd.slice(0,100), commsRemovedList:cRem.slice(0,100),
+    assignmentsAdded:added(pp,np).length, assignmentsRemoved:added(np,pp).length,
+    assignDelta:np.size-pp.size};
 }
 
 async function publish(parsed,key){
