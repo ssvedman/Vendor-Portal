@@ -221,17 +221,35 @@ function changesUnread(){ const c=latestMajorChange(); if(!c) return false; try{
 function openChanges(){
   const c=latestMajorChange(); if(c){ try{ localStorage.setItem("vp_seen_change_"+state.divKey,String(c.id)); }catch(e){} }
   const rows=state.changes||[]; const num=v=>fmt(v||0);
-  const body = rows.length ? rows.map(r=>{ const s=r.summary||{};
-      const add=Array.isArray(s.commsAddedList)?s.commsAddedList:[], rem=Array.isArray(s.commsRemovedList)?s.commsRemovedList:[];
-      const major=(s.commsAdded||0)>0||(s.commsRemoved||0)>0; const aA=s.assignmentsAdded, aR=s.assignmentsRemoved;
+  const chips=(arr,cls)=> (Array.isArray(arr)&&arr.length)? arr.map(x=>`<span class="chip ${cls}">${esc(x)}</span>`).join("") : "";
+  const pairs=(arr,cls)=> (Array.isArray(arr)&&arr.length)? `<ul class="chg-list">${arr.map(p=>{const i=String(p).indexOf("|"); const vn=i>=0?p.slice(0,i):p, cn=i>=0?p.slice(i+1):""; return `<li><span class="${cls}">${esc(vn)}</span>${cn?` <span class="chg-arrow">to</span> ${esc(cn)}`:""}</li>`;}).join("")}</ul>` : "";
+  const more=(total,list)=> (Array.isArray(list)&&total>list.length)? `<div class="cat-tag">+${num(total-list.length)} more</div>` : "";
+  const body = rows.length ? rows.map((r,i)=>{ const s=r.summary||{};
+      const cA=s.commsAdded||0, cR=s.commsRemoved||0;
+      const aA=(s.assignmentsAdded!=null)?s.assignmentsAdded:null, aR=(s.assignmentsRemoved!=null)?s.assignmentsRemoved:null;
+      const major=cA>0||cR>0;
+      const assignTag=(aA!=null||aR!=null)? `assign +${num(aA||0)}/-${num(aR||0)}` : `assign net ${(s.assignDelta>=0?"+":"")+num(s.assignDelta||0)}`;
+      const detail=
+        (cA?`<div class="chg-sec"><div class="chg-sec-h">Communities added (${num(cA)})</div>${chips(s.commsAddedList,"good-chip")||'<span class="tiny">names not recorded</span>'}${more(cA,s.commsAddedList)}</div>`:"")
+       +(cR?`<div class="chg-sec"><div class="chg-sec-h">Communities removed (${num(cR)})</div>${chips(s.commsRemovedList,"bad-chip")||'<span class="tiny">names not recorded</span>'}${more(cR,s.commsRemovedList)}</div>`:"")
+       +((aA||0)?`<div class="chg-sec"><div class="chg-sec-h">Trade assignments added (${num(aA)})</div>${pairs(s.assignAddedList,"add-v")||'<span class="tiny">details not recorded for this update</span>'}${more(aA,s.assignAddedList)}</div>`:"")
+       +((aR||0)?`<div class="chg-sec"><div class="chg-sec-h">Trade assignments removed (${num(aR)})</div>${pairs(s.assignRemovedList,"rem-v")||'<span class="tiny">details not recorded for this update</span>'}${more(aR,s.assignRemovedList)}</div>`:"")
+       +((!cA&&!cR&&!(aA||0)&&!(aR||0))?`<div class="tiny">No structural changes recorded for this update.</div>`:"");
       return `<div class="chg${major?' chg-major':''}">
-        <div class="chg-head"><b>${new Date(r.created_at).toLocaleString()}</b> <span class="chg-by">${esc(r.actor||"")}</span></div>
-        ${(s.commsAdded||0)?`<div class="chg-line"><span class="chip good-chip">+${num(s.commsAdded)} communities</span>${add.map(x=>`<span class="chip">${esc(x)}</span>`).join("")}${s.commsAdded>add.length?`<span class="cat-tag">+${num(s.commsAdded-add.length)} more</span>`:""}</div>`:""}
-        ${(s.commsRemoved||0)?`<div class="chg-line"><span class="chip bad-chip">-${num(s.commsRemoved)} communities</span>${rem.map(x=>`<span class="chip warn-chip">${esc(x)}</span>`).join("")}${s.commsRemoved>rem.length?`<span class="cat-tag">+${num(s.commsRemoved-rem.length)} more</span>`:""}</div>`:""}
-        <div class="chg-meta">Trade assignments: ${aA!=null?`+${num(aA)} / -${num(aR)}`:`net ${(s.assignDelta>=0?"+":"")+num(s.assignDelta)}`} &middot; vendors +${num(s.vendorsAdded)}/-${num(s.vendorsRemoved)}</div>
+        <button class="chg-toggle" data-i="${i}" aria-expanded="false">
+          <span class="chg-when"><b>${new Date(r.created_at).toLocaleString()}</b> <span class="chg-by">${esc(r.actor||"")}</span></span>
+          <span class="chg-tags">${(cA||cR)?`<span class="chip warn-chip">comm +${num(cA)}/-${num(cR)}</span>`:""}<span class="chip">${assignTag}</span></span>
+          <span class="chg-chev">&#9656;</span>
+        </button>
+        <div class="chg-detail hidden" id="chgd-${i}">${detail}</div>
       </div>`; }).join("")
-    : `<div class="empty">No updates recorded yet${DEMO?" (demo mode — change history needs the backend)":""}.</div>`;
-  showModal("Change history &mdash; "+esc(state.data.division), body); renderBanner();
+    : `<div class="empty">No updates recorded yet${DEMO?" (demo mode - change history needs the backend)":""}.</div>`;
+  showModal("Change history &mdash; "+esc(state.data.division)+" &middot; newest first", body);
+  document.querySelectorAll("#vpModal .chg-toggle").forEach(btn=>btn.addEventListener("click",()=>{
+    const dd=$("chgd-"+btn.dataset.i); const isOpen=!dd.classList.contains("hidden");
+    dd.classList.toggle("hidden"); btn.classList.toggle("open"); btn.setAttribute("aria-expanded",String(!isOpen));
+  }));
+  renderBanner();
 }
 function showModal(title, html){
   closeModal();
@@ -824,11 +842,13 @@ function diffPayload(prev,next){
   const pp=pairs(prev&&prev.vendors), np=pairs(next.vendors);
   const added=(A,B)=>[...B].filter(x=>!A.has(x));
   const cAdd=added(pc,nc), cRem=added(nc,pc);
+  const aAdd=added(pp,np), aRem=added(np,pp);
   return {vendors:nv.size, communities:nc.size,
     vendorsAdded:added(pv,nv).length, vendorsRemoved:added(nv,pv).length,
     commsAdded:cAdd.length, commsRemoved:cRem.length,
-    commsAddedList:cAdd.slice(0,100), commsRemovedList:cRem.slice(0,100),
-    assignmentsAdded:added(pp,np).length, assignmentsRemoved:added(np,pp).length,
+    commsAddedList:cAdd, commsRemovedList:cRem,
+    assignmentsAdded:aAdd.length, assignmentsRemoved:aRem.length,
+    assignAddedList:aAdd, assignRemovedList:aRem,
     assignDelta:np.size-pp.size};
 }
 

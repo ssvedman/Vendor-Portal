@@ -259,6 +259,21 @@ tbody tr.totalrow:hover td{background:#eef4fb}
 .good-chip{background:#e7f4ec;color:var(--good)}
 .bad-chip{background:#fdecec;color:#b3261e}
 
+/* expandable change cards */
+.chg-toggle{width:100%;display:flex;align-items:center;gap:10px;background:none;border:none;text-align:left;padding:2px 0;cursor:pointer;font-size:13.5px;color:var(--navy)}
+.chg-when{flex:1;min-width:0}
+.chg-tags{display:flex;gap:6px;flex-wrap:wrap}
+.chg-chev{color:var(--muted);transition:transform .15s;flex:0 0 auto}
+.chg-toggle.open .chg-chev{transform:rotate(90deg)}
+.chg-detail{padding-top:10px;margin-top:8px;border-top:1px solid var(--line)}
+.chg-sec{margin-bottom:12px}
+.chg-sec-h{font-size:12.5px;font-weight:700;color:var(--navy);margin-bottom:5px}
+.chg-list{list-style:none;margin:0;padding:0;max-height:220px;overflow:auto;font-size:13px}
+.chg-list li{padding:3px 0;border-bottom:1px solid var(--line)}
+.chg-arrow{color:var(--muted);font-size:11px}
+.add-v{color:var(--good);font-weight:600}
+.rem-v{color:#b3261e;font-weight:600}
+
 /* modal overlay */
 .modal-ov{position:fixed;inset:0;background:rgba(10,37,64,.45);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px}
 .modal-card{background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-width:640px;width:100%;max-height:82vh;display:flex;flex-direction:column;overflow:hidden}
