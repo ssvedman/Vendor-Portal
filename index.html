@@ -75,29 +75,40 @@
     </section>
 
     <section id="admin" class="hidden">
-      <h2 style="color:var(--navy)">Admin — Update Division Data</h2>
-      <p style="color:var(--muted);max-width:720px">Upload the raw exports for a division. <b>Vendor assignments</b> come from the RE2 export (e.g. <i>Book1.xlsx</i>); <b>starts</b> come from the division's start log/schedule. Publishing performs a full replace of that division.</p>
+      <h2 style="color:var(--navy)">Admin</h2>
       <div class="admin-layout">
         <div class="admin-grid">
-        <div class="panel"><div class="panel-h">1. Division</div>
-          <div style="padding:16px"><select id="adminDiv"></select></div></div>
-        <div class="panel"><div class="panel-h">2. Vendor assignments (RE2 export)</div>
-          <div style="padding:16px">
-            <button class="btn mini ghost" id="pickRe2">Choose RE2 .xlsx</button>
-            <input type="file" id="re2Input" accept=".xlsx,.xlsm" class="hidden">
-            <span class="fileok" id="re2Name"></span></div></div>
-        <div class="panel"><div class="panel-h">3. Starts (start log / schedule)</div>
-          <div style="padding:16px">
-            <button class="btn mini ghost" id="pickStarts">Choose starts .xlsx</button>
-            <input type="file" id="startsInput" accept=".xlsx,.xlsm" class="hidden">
-            <span class="fileok" id="startsName"></span></div></div>
-        <div class="panel hidden" id="previewPanel"><div class="panel-h">4. Preview &amp; publish</div>
-          <div style="padding:16px" id="previewBody"></div></div>
-        <div id="adminMsg" class="msg"></div>
-        <div id="rollbackWrap"></div>
-        <div><button class="btn mini ghost" id="historyBtn">View change history →</button></div>
+          <div class="panel">
+            <div class="panel-h">Update division data</div>
+            <div style="padding:16px">
+              <p class="tiny" style="text-align:left;margin:0 0 12px">Vendor assignments come from the RE2 export (Book1.xlsx); starts come from the division's start log/schedule. Publishing performs a full replace of the selected division.</p>
+              <label class="fld" for="adminDiv">Division</label>
+              <select id="adminDiv" style="width:100%;margin-bottom:14px"></select>
+              <div class="uptiles">
+                <div class="uptile" id="tileRe2" tabindex="0" role="button" aria-label="Upload vendor assignments file">
+                  <div class="uptile-ic">&#8593;</div>
+                  <div class="uptile-t">Vendor assignments</div>
+                  <div class="uptile-s" id="re2Name">Drop RE2 .xlsx or click to browse</div>
+                </div>
+                <div class="uptile" id="tileStarts" tabindex="0" role="button" aria-label="Upload starts file">
+                  <div class="uptile-ic">&#8593;</div>
+                  <div class="uptile-t">Starts</div>
+                  <div class="uptile-s" id="startsName">Drop starts .xlsx or click to browse</div>
+                </div>
+              </div>
+              <input type="file" id="re2Input" accept=".xlsx,.xlsm" class="hidden">
+              <input type="file" id="startsInput" accept=".xlsx,.xlsm" class="hidden">
+              <div class="panel-inset hidden" id="previewPanel"><div id="previewBody"></div></div>
+              <div id="adminMsg" class="msg"></div>
+            </div>
+          </div>
         </div>
-        <div id="permsPanel" class="hidden"></div>
+        <div class="admin-side">
+          <div id="permsPanel" class="hidden"></div>
+          <div id="rollbackWrap"></div>
+          <div class="panel"><div class="panel-h">Change history</div>
+            <div style="padding:14px"><button class="btn mini ghost" id="historyBtn">View full change history →</button></div></div>
+        </div>
       </div>
     </section>
   </main>

@@ -301,6 +301,18 @@ tbody tr.totalrow:hover td{background:#eef4fb}
 .admin-layout{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
 .admin-layout .admin-grid{max-width:none}
 @media (max-width:900px){ .admin-layout{grid-template-columns:1fr} }
+.admin-side{display:flex;flex-direction:column;gap:16px}
+.uptiles{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+.uptile{border:2px dashed var(--line);border-radius:12px;padding:18px 14px;text-align:center;cursor:pointer;background:var(--card);transition:border-color .15s,background .15s}
+.uptile:hover,.uptile.drag{border-color:var(--blue);background:var(--blue-050)}
+.uptile:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.uptile.filled{border-style:solid;border-color:var(--good)}
+.uptile-ic{font-size:22px;line-height:1;color:var(--muted);margin-bottom:6px}
+.uptile.filled .uptile-ic{color:var(--good)}
+.uptile-t{font-weight:600;color:var(--navy);font-size:13.5px}
+.uptile-s{font-size:12px;color:var(--muted);margin-top:3px;word-break:break-word}
+.panel-inset{border:1px solid var(--line);border-radius:10px;padding:14px;margin:14px 0 0;background:var(--card)}
+@media (max-width:520px){ .uptiles{grid-template-columns:1fr} }
 
 /* modal overlay */
 .modal-ov{position:fixed;inset:0;background:rgba(10,37,64,.45);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px}

@@ -747,12 +747,21 @@ function initAdmin(){
   const sel=$("adminDiv");
   const opts=CFG.DIVISIONS.filter(dv=>canEdit(dv.key));
   sel.innerHTML=(opts.length?opts:CFG.DIVISIONS).map(d=>`<option value="${d.key}">${esc(d.label)}</option>`).join("");
-  $("pickRe2").addEventListener("click",()=>$("re2Input").click());
-  $("pickStarts").addEventListener("click",()=>$("startsInput").click());
-  $("re2Input").addEventListener("change",e=>{ if(e.target.files[0]) loadUpload("re2",e.target.files[0]); });
-  $("startsInput").addEventListener("change",e=>{ if(e.target.files[0]) loadUpload("starts",e.target.files[0]); });
+  wireTile("tileRe2","re2Input","re2");
+  wireTile("tileStarts","startsInput","starts");
+  $("re2Input").addEventListener("change",e=>{ if(e.target.files[0]) loadUpload("re2",e.target.files[0]); e.target.value=""; });
+  $("startsInput").addEventListener("change",e=>{ if(e.target.files[0]) loadUpload("starts",e.target.files[0]); e.target.value=""; });
   sel.addEventListener("change",()=>{ renderRollback(sel.value); if(uploadFiles.re2||uploadFiles.starts) tryBuildPreview(); });
   $("historyBtn").addEventListener("click",()=>{ showDashboard(); activateTab("history"); state.view="history"; renderView(); });
+}
+function wireTile(tileId,inputId,kind){
+  const tile=$(tileId); if(!tile) return;
+  const open=()=>$(inputId).click();
+  tile.addEventListener("click",open);
+  tile.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); open(); } });
+  ["dragenter","dragover"].forEach(ev=>tile.addEventListener(ev,e=>{ e.preventDefault(); tile.classList.add("drag"); }));
+  ["dragleave","dragend","drop"].forEach(ev=>tile.addEventListener(ev,e=>{ e.preventDefault(); tile.classList.remove("drag"); }));
+  tile.addEventListener("drop",e=>{ const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(f) loadUpload(kind,f); });
 }
 function adminMsg(t,k){ const m=$("adminMsg"); m.className="msg "+(k||"info"); m.textContent=t; }
 
@@ -762,6 +771,8 @@ async function loadUpload(kind,file){
     const buf=await file.arrayBuffer();
     uploadFiles[kind]={name:file.name, wb:XLSX.read(buf,{type:"array"})};
     $(kind==="re2"?"re2Name":"startsName").textContent=file.name;
+    const tile=$(kind==="re2"?"tileRe2":"tileStarts");
+    if(tile){ tile.classList.add("filled"); const ic=tile.querySelector(".uptile-ic"); if(ic) ic.innerHTML="&#10003;"; }
     tryBuildPreview();
   } catch(e){ adminMsg("Could not read "+file.name+": "+e.message,"err"); }
 }
