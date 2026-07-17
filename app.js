@@ -305,6 +305,9 @@ function viewByVendor(){
 function viewMatrix(){
   const d=state.data; const active=rangeCommSet();
   const src=d.vendors.map(v=>({...v, assigned:v.assigned.filter(c=>active.has(c))})).filter(v=>v.assigned.length>0);
+  const agg=startsAgg(); const byComm={}; agg.rows.forEach(r=>byComm[r.community]=r.total); const totalStarts=agg.total;
+  const vStarts=v=>v.assigned.reduce((s,c)=>s+(byComm[c]||0),0);
+  const vPct=v=>totalStarts?Math.round(vStarts(v)/totalStarts*1000)/10:0;
   const cats=["All categories",...[...new Set(src.map(v=>v.category).filter(Boolean))].sort()];
   $("viewArea").innerHTML=`
     ${toolbar(`<input type="text" id="mSearch" placeholder="Search vendor…">
@@ -323,12 +326,12 @@ function viewMatrix(){
     $("mCount").textContent=`${rows.length} vendors × ${comms.length} communities`;
     const cap=rows.slice(0,250);
     $("mBody").innerHTML=`<table class="matrix"><thead><tr><th class="sticky">Trade Partner</th>${comms.map(c=>`<th class="vhead" title="${esc(commLabel(c.name))}">${esc(c.name)}${c.id?"  ·  "+esc(shortId(c.id)):""}</th>`).join("")}</tr></thead>
-      <tbody>${cap.map(v=>{const set=new Set(v.assigned);
-        return `<tr><td class="sticky">${esc(v.name)}${supTag(v)}<br><span class="cat-tag">${esc(v.category||"")}</span></td>${comms.map(c=>`<td class="cell">${set.has(c.name)?'<span class="x-mark">✓</span>':''}</td>`).join("")}</tr>`;}).join("")}</tbody></table>
+      <tbody>${cap.map(v=>{const set=new Set(v.assigned); const sv=vStarts(v); const p=vPct(v);
+        return `<tr><td class="sticky">${esc(v.name)}${supTag(v)}<br><span class="cat-tag">${esc(v.category||"")}</span> <span class="starts-chip" title="Starts in this vendor's communities for the selected range">${fmt(sv)} starts · ${p}%</span></td>${comms.map(c=>`<td class="cell">${set.has(c.name)?'<span class="x-mark">✓</span>':''}</td>`).join("")}</tr>`;}).join("")}</tbody></table>
       ${rows.length>250?`<div class="empty">Showing first 250 of ${rows.length}. Narrow with filters.</div>`:""}`;
     window._expM=()=>exportCSV(`${d.key}_assignment_matrix`,
-      ["Trade Partner","Supplier #","Trade Category",...comms.map(c=>commLabel(c.name))],
-      rows.map(v=>{const set=new Set(v.assigned); return [v.name, v.supplierCode||"", v.category||"", ...comms.map(c=>set.has(c.name)?"X":"")];}));
+      ["Trade Partner","Supplier #","Trade Category","Starts (range)","% of starts",...comms.map(c=>commLabel(c.name))],
+      rows.map(v=>{const set=new Set(v.assigned); return [v.name, v.supplierCode||"", v.category||"", vStarts(v), vPct(v), ...comms.map(c=>set.has(c.name)?"X":"")];}));
   };
   $("mSearch").addEventListener("input",render); $("mCat").addEventListener("change",render); $("mComm").addEventListener("change",render);
   $("mExport").addEventListener("click",()=>window._expM()); render();
