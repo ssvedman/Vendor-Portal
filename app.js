@@ -17,6 +17,11 @@ const $  = id => document.getElementById(id);
 const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmt = n => (n==null||isNaN(n))?"—":Number(n).toLocaleString();
 const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+(function(){ try{ const t=localStorage.getItem("vp_theme"); if(t) document.documentElement.setAttribute("data-theme",t);
+  else if(window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches) document.documentElement.setAttribute("data-theme","dark"); }catch(e){} })();
+function toggleTheme(){ const isDark=document.documentElement.getAttribute("data-theme")==="dark"; const next=isDark?"light":"dark";
+  document.documentElement.setAttribute("data-theme",next); try{localStorage.setItem("vp_theme",next);}catch(e){}
+  const b=$("themeBtn"); if(b) b.textContent=next==="dark"?"Light":"Dark"; }
 
 /* ---------------- ROLES ---------------- */
 function resolveRole(email){
@@ -120,6 +125,7 @@ async function enterApp(email){
   if(prefs.from && prefs.to && prefs.from<=prefs.to) state.range={from:prefs.from,to:prefs.to};
   if(prefs.view) state.view=prefs.view;
 
+  await loadDivisionsFromDB();
   const sel=$("divisionSel");
   sel.innerHTML=CFG.DIVISIONS.map(d=>`<option value="${d.key}">${esc(d.label)}</option>`).join("");
   sel.addEventListener("change",()=>loadDivision(sel.value));
@@ -140,6 +146,7 @@ async function enterApp(email){
   $("adminLink").addEventListener("click",showAdmin);
   $("dashLink").addEventListener("click",showDashboard);
   $("printBtn").addEventListener("click",()=>window.print());
+  $("themeBtn").addEventListener("click",toggleTheme); $("themeBtn").textContent=document.documentElement.getAttribute("data-theme")==="dark"?"Light":"Dark";
   $("homeLogo").addEventListener("click",()=>{ showDashboard(); activateTab("community"); state.view="community"; renderView(); });
   setupGlobalSearch();
   $("viewArea").addEventListener("click",e=>{ const el=e.target.closest("[data-vendor]"); if(el){ e.preventDefault(); openVendor(el.getAttribute("data-vendor")); } });
@@ -215,17 +222,18 @@ function savePrefs(){ try{ localStorage.setItem("vp_prefs",JSON.stringify({divKe
 async function loadChanges(key){
   state.changes=[];
   if(DEMO||!sb) return;
-  try{ const {data}=await sb.from("change_log").select("id,actor,summary,created_at").eq("key",key).order("created_at",{ascending:false}).limit(100); state.changes=data||[]; }catch(e){ state.changes=[]; }
+  try{ const {data}=await sb.from("change_log").select("id,key,actor,summary,created_at").order("created_at",{ascending:false}).limit(200); state.changes=data||[]; }catch(e){ state.changes=[]; }
 }
-function latestMajorChange(){ const c=(state.changes||[])[0]; if(!c||!c.summary) return null; return ((c.summary.commsAdded||0)>0||(c.summary.commsRemoved||0)>0)?c:null; }
+function latestMajorChange(){ return (state.changes||[]).find(x=>x.key===state.divKey && x.summary && ((x.summary.commsAdded||0)>0||(x.summary.commsRemoved||0)>0))||null; }
 function changesUnread(){ const c=latestMajorChange(); if(!c) return false; try{ return String(localStorage.getItem("vp_seen_change_"+state.divKey))!==String(c.id); }catch(e){ return true; } }
 function openChanges(){
   const c=latestMajorChange(); if(c){ try{ localStorage.setItem("vp_seen_change_"+state.divKey,String(c.id)); }catch(e){} }
-  const rows=state.changes||[]; const num=v=>fmt(v||0);
+  const all=state.changes||[]; const num=v=>fmt(v||0);
+  const divLabel=k=>(CFG.DIVISIONS.find(d=>d.key===k)||{}).label||k;
   const chips=(arr,cls)=> (Array.isArray(arr)&&arr.length)? arr.map(x=>`<span class="chip ${cls}">${esc(x)}</span>`).join("") : "";
   const pairs=(arr,cls)=> (Array.isArray(arr)&&arr.length)? `<ul class="chg-list">${arr.map(p=>{const i=String(p).indexOf("|"); const vn=i>=0?p.slice(0,i):p, cn=i>=0?p.slice(i+1):""; return `<li><span class="${cls}">${esc(vn)}</span>${cn?` <span class="chg-arrow">to</span> ${esc(cn)}`:""}</li>`;}).join("")}</ul>` : "";
   const more=(total,list)=> (Array.isArray(list)&&total>list.length)? `<div class="cat-tag">+${num(total-list.length)} more</div>` : "";
-  const body = rows.length ? rows.map((r,i)=>{ const s=r.summary||{};
+  const card=(r,i)=>{ const s=r.summary||{};
       const cA=s.commsAdded||0, cR=s.commsRemoved||0;
       const aA=(s.assignmentsAdded!=null)?s.assignmentsAdded:null, aR=(s.assignmentsRemoved!=null)?s.assignmentsRemoved:null;
       const major=cA>0||cR>0;
@@ -238,18 +246,25 @@ function openChanges(){
        +((!cA&&!cR&&!(aA||0)&&!(aR||0))?`<div class="tiny">No structural changes recorded for this update.</div>`:"");
       return `<div class="chg${major?' chg-major':''}">
         <button class="chg-toggle" data-i="${i}" aria-expanded="false">
+          <span class="chg-div">${esc(divLabel(r.key))}</span>
           <span class="chg-when"><span class="chg-date">${new Date(r.created_at).toLocaleString()}</span><span class="chg-by">${esc(r.actor||"")}</span></span>
           <span class="chg-tags">${(cA||cR)?`<span class="chip warn-chip">comm +${num(cA)}/-${num(cR)}</span>`:""}<span class="chip">${assignTag}</span></span>
           <span class="chg-chev">&#9656;</span>
         </button>
         <div class="chg-detail hidden" id="chgd-${i}">${detail}</div>
-      </div>`; }).join("")
+      </div>`; };
+  const listHtml=list=> list.length? list.map((r,i)=>card(r,i)).join("") : `<div class="empty">No updates for this division.</div>`;
+  const filterOpts=`<option value="">All divisions</option>${CFG.DIVISIONS.map(d=>`<option value="${d.key}">${esc(d.label)}</option>`).join("")}`;
+  const shell = all.length
+    ? `<div class="chg-filter"><label for="chgFilter">Division</label><select id="chgFilter">${filterOpts}</select><span class="count" id="chgCount"></span></div><div id="chgList"></div>`
     : `<div class="empty">No updates recorded yet${DEMO?" (demo mode - change history needs the backend)":""}.</div>`;
-  showModal("Change history &mdash; "+esc(state.data.division)+" &middot; newest first", body);
-  document.querySelectorAll("#vpModal .chg-toggle").forEach(btn=>btn.addEventListener("click",()=>{
+  showModal("Change history &middot; newest first", shell);
+  const wire=()=>{ document.querySelectorAll("#vpModal .chg-toggle").forEach(btn=>btn.addEventListener("click",()=>{
     const dd=$("chgd-"+btn.dataset.i); const isOpen=!dd.classList.contains("hidden");
-    dd.classList.toggle("hidden"); btn.classList.toggle("open"); btn.setAttribute("aria-expanded",String(!isOpen));
-  }));
+    dd.classList.toggle("hidden"); btn.classList.toggle("open"); btn.setAttribute("aria-expanded",String(!isOpen)); })); };
+  const applyFilter=()=>{ const sel=$("chgFilter"); const k=sel?sel.value:""; const list=k? all.filter(r=>r.key===k):all;
+    $("chgList").innerHTML=listHtml(list); if($("chgCount")) $("chgCount").textContent=list.length+" update"+(list.length===1?"":"s"); wire(); };
+  if(all.length){ applyFilter(); const fs=$("chgFilter"); if(fs) fs.addEventListener("change",applyFilter); }
   renderBanner();
 }
 function showModal(title, html){
@@ -635,7 +650,7 @@ function exportCSV(name,headers,rows){
 function showAdmin(){ if(!canUploadAny()) return;
   $("dashboard").classList.add("hidden"); $("admin").classList.remove("hidden");
   $("adminLink").classList.add("hidden"); $("dashLink").classList.remove("hidden");
-  renderPerms(); }
+  renderPerms(); renderRollback($("adminDiv").value); }
 
 /* ---------------- Access & permissions (admin only) ---------------- */
 function renderPerms(){
@@ -725,7 +740,7 @@ function initAdmin(){
   $("pickStarts").addEventListener("click",()=>$("startsInput").click());
   $("re2Input").addEventListener("change",e=>{ if(e.target.files[0]) loadUpload("re2",e.target.files[0]); });
   $("startsInput").addEventListener("change",e=>{ if(e.target.files[0]) loadUpload("starts",e.target.files[0]); });
-  sel.addEventListener("change",()=>{ if(uploadFiles.re2||uploadFiles.starts) tryBuildPreview(); });
+  sel.addEventListener("change",()=>{ renderRollback(sel.value); if(uploadFiles.re2||uploadFiles.starts) tryBuildPreview(); });
   $("historyBtn").addEventListener("click",()=>{ showDashboard(); activateTab("history"); state.view="history"; renderView(); });
 }
 function adminMsg(t,k){ const m=$("adminMsg"); m.className="msg "+(k||"info"); m.textContent=t; }
@@ -908,16 +923,57 @@ async function publish(parsed,key){
   adminMsg("Publishing…","info");
   delete parsed._diag;
   try {
-    const {data:prevRow}=await sb.from("division_data").select("payload").eq("key",key).maybeSingle();
+    const {data:prevRow}=await sb.from("division_data").select("payload,updated_at,updated_by").eq("key",key).maybeSingle();
     const summary=diffPayload(prevRow&&prevRow.payload,parsed);
     const {error}=await sb.from("division_data").upsert(
-      {key,label:parsed.division,payload:parsed,updated_at:new Date().toISOString(),updated_by:state.email},{onConflict:"key"});
+      {key,label:parsed.division,payload:parsed,updated_at:new Date().toISOString(),updated_by:state.email,
+       prev_payload:prevRow?prevRow.payload:null,prev_updated_at:prevRow?prevRow.updated_at:null,prev_by:prevRow?prevRow.updated_by:null},{onConflict:"key"});
     if(error) throw error;
     await sb.from("change_log").insert({key,actor:state.email,summary});
     delete state.cache[key];
     const sign = summary.assignDelta>=0 ? "+" : "";
     adminMsg("Published. "+parsed.division+" replaced. Assignments "+sign+summary.assignDelta+", +"+summary.vendorsAdded+"/-"+summary.vendorsRemoved+" vendors.","ok");
+    renderRollback(key);
   } catch(e){ adminMsg("Publish failed: "+e.message,"err"); }
+}
+async function revertDivision(key){
+  if(DEMO||!sb) return;
+  adminMsg("Reverting…","info");
+  try{
+    const {data:row}=await sb.from("division_data").select("payload,updated_at,updated_by,prev_payload,prev_updated_at,prev_by,label").eq("key",key).maybeSingle();
+    if(!row||!row.prev_payload){ adminMsg("No previous version to revert to.","err"); return; }
+    const summary=diffPayload(row.payload,row.prev_payload);
+    const label=(row.prev_payload&&row.prev_payload.division)||row.label;
+    const {error}=await sb.from("division_data").upsert(
+      {key,label,payload:row.prev_payload,updated_at:new Date().toISOString(),updated_by:state.email+" (revert)",
+       prev_payload:row.payload,prev_updated_at:row.updated_at,prev_by:row.updated_by},{onConflict:"key"});
+    if(error) throw error;
+    await sb.from("change_log").insert({key,actor:state.email+" (revert)",summary});
+    delete state.cache[key];
+    adminMsg("Reverted "+label+" to the previous version.","ok");
+    renderRollback(key);
+  }catch(e){ adminMsg("Revert failed: "+e.message,"err"); }
+}
+async function renderRollback(key){
+  const wrap=$("rollbackWrap"); if(!wrap) return;
+  if(DEMO||!sb){ wrap.innerHTML=""; return; }
+  try{
+    const {data:row}=await sb.from("division_data").select("updated_at,updated_by,prev_updated_at,prev_by,prev_payload").eq("key",key).maybeSingle();
+    const dl=(CFG.DIVISIONS.find(d=>d.key===key)||{}).label||key;
+    if(!row){ wrap.innerHTML=`<div class="panel"><div class="panel-h">Rollback</div><div style="padding:14px"><p class="tiny">No data published for ${esc(dl)} yet.</p></div></div>`; return; }
+    const has=!!row.prev_payload;
+    wrap.innerHTML=`<div class="panel"><div class="panel-h">Rollback — ${esc(dl)}</div><div style="padding:14px">
+      <p class="tiny" style="margin:0 0 6px">Current: ${row.updated_at?esc(new Date(row.updated_at).toLocaleString()):"—"}${row.updated_by?" by "+esc(row.updated_by):""}</p>
+      ${has?`<p class="tiny" style="margin:0 0 10px">Previous: ${row.prev_updated_at?esc(new Date(row.prev_updated_at).toLocaleString()):"—"}${row.prev_by?" by "+esc(row.prev_by):""}</p><button class="btn mini ghost" id="revertBtn">Revert to previous version</button>`
+        :`<p class="tiny">No previous version yet — rollback becomes available after your next upload.</p>`}
+    </div></div>`;
+    if(has){ $("revertBtn").addEventListener("click",()=>{ if(confirm("Revert "+dl+" to the previous version?\n\nThe current version is swapped out (revert again to redo). This is logged in the change history.")) revertDivision(key); }); }
+  }catch(e){ wrap.innerHTML=""; }
+}
+async function loadDivisionsFromDB(){
+  if(DEMO||!sb) return;
+  try{ const {data}=await sb.from("app_divisions").select("key,label,code,sort").order("sort");
+    if(data&&data.length){ CFG.DIVISIONS.length=0; data.forEach(d=>CFG.DIVISIONS.push({key:d.key,label:d.label,code:d.code})); } }catch(e){}
 }
 
 checkExistingSession();
