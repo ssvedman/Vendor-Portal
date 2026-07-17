@@ -237,7 +237,7 @@ function openChanges(){
        +((!cA&&!cR&&!(aA||0)&&!(aR||0))?`<div class="tiny">No structural changes recorded for this update.</div>`:"");
       return `<div class="chg${major?' chg-major':''}">
         <button class="chg-toggle" data-i="${i}" aria-expanded="false">
-          <span class="chg-when"><b>${new Date(r.created_at).toLocaleString()}</b> <span class="chg-by">${esc(r.actor||"")}</span></span>
+          <span class="chg-when"><span class="chg-date">${new Date(r.created_at).toLocaleString()}</span><span class="chg-by">${esc(r.actor||"")}</span></span>
           <span class="chg-tags">${(cA||cR)?`<span class="chip warn-chip">comm +${num(cA)}/-${num(cR)}</span>`:""}<span class="chip">${assignTag}</span></span>
           <span class="chg-chev">&#9656;</span>
         </button>
