@@ -142,6 +142,7 @@ async function enterApp(email){
   $("printBtn").addEventListener("click",()=>window.print());
   $("homeLogo").addEventListener("click",()=>{ showDashboard(); activateTab("community"); state.view="community"; renderView(); });
   setupGlobalSearch();
+  $("viewArea").addEventListener("click",e=>{ const el=e.target.closest("[data-vendor]"); if(el){ e.preventDefault(); openVendor(el.getAttribute("data-vendor")); } });
   initAdmin();
   const startKey=(prefs.divKey && CFG.DIVISIONS.some(d=>d.key===prefs.divKey)) ? prefs.divKey : CFG.DIVISIONS[0].key;
   sel.value=startKey;
@@ -262,6 +263,21 @@ function showModal(title, html){
 }
 function escClose(e){ if(e.key==="Escape") closeModal(); }
 function closeModal(){ const m=$("vpModal"); if(m) m.remove(); document.removeEventListener("keydown",escClose); }
+function openVendor(name){
+  if(!state.data) return;
+  const rows=state.data.vendors.filter(v=>v.name===name);
+  if(!rows.length) return;
+  const sup=(rows.find(v=>v.supplierCode)||{}).supplierCode;
+  const agg=startsAgg(); const byComm={}; agg.rows.forEach(r=>byComm[r.community]=r.total);
+  const allC=new Set(); rows.forEach(v=>v.assigned.forEach(c=>allC.add(c)));
+  const totalStarts=[...allC].reduce((s,c)=>s+(byComm[c]||0),0);
+  const trades=rows.slice().sort((a,b)=>(a.category||"").localeCompare(b.category||""));
+  const body=`<div class="vd-meta">${sup?`<span class="sup">#${esc(sup)}</span> &middot; `:""}${trades.length} trade${trades.length===1?"":"s"} &middot; ${allC.size} communities &middot; ${fmt(totalStarts)} starts in range (${state.range.from} to ${state.range.to})</div>`
+    + trades.map(v=>{ const st=v.assigned.reduce((s,c)=>s+(byComm[c]||0),0);
+        return `<div class="vd-trade"><div class="vd-trade-h">${esc(v.category||"—")} <span class="cat-tag">${v.assigned.length} communities &middot; ${fmt(st)} starts</span></div>`
+          +`<div class="vd-comms">${v.assigned.slice().sort().map(c=>`<span class="chip">${esc(commLabel(c))}</span>`).join("")||'<span class="tiny">no communities in range</span>'}</div></div>`; }).join("");
+  showModal(esc(name), body);
+}
 
 /* ---------------- KPIs ---------------- */
 function activeCommunities(){ // communities that have >=1 vendor assignment
@@ -318,7 +334,7 @@ function viewByCommunity(){
     $("commBody").innerHTML=rows.length?`<div class="table-wrap"><table>
       <thead><tr><th>Trade Category</th><th>Trade Partner</th><th>Trade Code</th></tr></thead>
       <tbody>${rows.map(v=>`<tr><td><span class="cat-tag">${esc(v.category||"—")}</span></td>
-        <td>${esc(v.name)}${supTag(v)}</td><td>${esc(v.tradeCode||"—")}</td></tr>`).join("")}</tbody></table></div>`
+        <td><span class="vlink" data-vendor="${esc(v.name)}">${esc(v.name)}</span>${supTag(v)}</td><td>${esc(v.tradeCode||"—")}</td></tr>`).join("")}</tbody></table></div>`
       :`<div class="empty">No vendors match.</div>`;
     window._exp=()=>exportCSV(`${comm}_vendors`,["Category","Trade Partner","Supplier #","Trade Code"],rows.map(v=>[v.category,v.name,v.supplierCode,v.tradeCode]));
   };
@@ -392,7 +408,7 @@ function viewMatrix(){
     const cap=rows.slice(0,250);
     $("mBody").innerHTML=`<table class="matrix"><thead><tr><th class="sticky">Trade Partner</th>${comms.map(c=>`<th class="vhead" title="${esc(commLabel(c.name))}">${esc(c.name)}${c.id?"  ·  "+esc(shortId(c.id)):""}</th>`).join("")}</tr></thead>
       <tbody>${cap.map(v=>{const set=new Set(v.assigned); const sv=vStarts(v); const p=vPct(v);
-        return `<tr><td class="sticky">${esc(v.name)}${supTag(v)}<br><span class="cat-tag">${esc(v.category||"")}</span> <span class="starts-chip" title="Starts in this vendor's communities for the selected range">${fmt(sv)} starts · ${p}%</span></td>${comms.map(c=>`<td class="cell">${set.has(c.name)?'<span class="x-mark">✓</span>':''}</td>`).join("")}</tr>`;}).join("")}</tbody></table>
+        return `<tr><td class="sticky"><span class="vlink" data-vendor="${esc(v.name)}">${esc(v.name)}</span>${supTag(v)}<br><span class="cat-tag">${esc(v.category||"")}</span> <span class="starts-chip" title="Starts in this vendor's communities for the selected range">${fmt(sv)} starts · ${p}%</span></td>${comms.map(c=>`<td class="cell">${set.has(c.name)?'<span class="x-mark">✓</span>':''}</td>`).join("")}</tr>`;}).join("")}</tbody></table>
       ${rows.length>250?`<div class="empty">Showing first 250 of ${rows.length}. Narrow with filters.</div>`:""}`;
     window._expM=()=>exportCSV(`${d.key}_assignment_matrix`,
       ["Trade Partner","Supplier #","Trade Category","Starts (range)","% of starts",...comms.map(c=>commLabel(c.name))],
@@ -592,7 +608,8 @@ function setupGlobalSearch(){
     panel.innerHTML=html||`<div class="gs-sect">No matches</div>`;
     panel.classList.remove("hidden");
     panel.querySelectorAll(".gs-item").forEach(el=>el.addEventListener("click",()=>{
-      jumpTo(el.dataset.t, el.dataset.v); panel.classList.add("hidden"); box.value=""; }));
+      panel.classList.add("hidden"); box.value="";
+      if(el.dataset.t==="vendor") openVendor(el.dataset.v); else jumpTo(el.dataset.t, el.dataset.v); }));
   };
   box.addEventListener("input",run);
   box.addEventListener("focus",run);
@@ -723,25 +740,55 @@ async function loadUpload(kind,file){
   } catch(e){ adminMsg("Could not read "+file.name+": "+e.message,"err"); }
 }
 
-function tryBuildPreview(){
+async function tryBuildPreview(){
   const key=$("adminDiv").value;
   if(!uploadFiles.re2 && !uploadFiles.starts){ return; }
   adminMsg("Parsing…","info");
   try {
     const parsed=buildDivision(key, uploadFiles.re2 && uploadFiles.re2.wb, uploadFiles.starts && uploadFiles.starts.wb);
+    const diag=parsed._diag||{};
+    let current=state.cache[key]||null;
+    if(!current && !DEMO && sb){ try{ const {data}=await sb.from("division_data").select("payload").eq("key",key).maybeSingle(); current=(data&&data.payload)||null; }catch(e){} }
+    const diff = current ? diffPayload(current, parsed) : null;
+    const warns=[];
+    if(uploadFiles.re2){
+      const codes=Object.keys(diag.divCounts||{}).sort((a,b)=>diag.divCounts[b]-diag.divCounts[a]);
+      const match=diag.divCounts?(diag.divCounts[diag.code]||0):0;
+      if(match===0 && diag.re2Rows>0) warns.push(`No rows in this file match division <b>${esc(diag.code)}</b> — this looks like the wrong file.`);
+      else if(codes[0] && codes[0]!==diag.code) warns.push(`This file is mostly division <b>${esc(codes[0])}</b>; only ${fmt(match)} of ${fmt(diag.re2Rows)} rows are <b>${esc(diag.code)}</b>.`);
+      if((diag.unmatched||[]).length) warns.push(`${fmt(diag.unmatched.length)} communities couldn't be matched to a name (shown by ID) — upload the matching starts file for best names.`);
+    }
+    if(current && diff){
+      if(parsed.communities.length < current.communities.length*0.3)
+        warns.push(`Removes ~${fmt(current.communities.length-parsed.communities.length)} of ${fmt(current.communities.length)} communities (over 70%). Check you picked the right file.`);
+      const curA=current.vendors.reduce((s,v)=>s+v.assigned.length,0), newA=parsed.vendors.reduce((s,v)=>s+v.assigned.length,0);
+      if(newA < curA*0.3) warns.push(`Removes over 70% of trade assignments (${fmt(curA)} → ${fmt(newA)}).`);
+    }
     window._parsed=parsed;
     $("previewPanel").classList.remove("hidden");
+    const diffHtml = diff
+      ? `<div class="diffrow"><span class="dl">Changes vs current:</span><span class="chip good-chip">+${fmt(diff.commsAdded)} comm</span><span class="chip bad-chip">-${fmt(diff.commsRemoved)} comm</span><span class="chip">assign +${fmt(diff.assignmentsAdded)}/-${fmt(diff.assignmentsRemoved)}</span><span class="chip">vendors +${fmt(diff.vendorsAdded)}/-${fmt(diff.vendorsRemoved)}</span></div>`
+      : `<p class="tiny">First upload for this division — nothing to compare against.</p>`;
+    const warnHtml = warns.length ? `<div class="warnbox"><b>Review before publishing</b><ul>${warns.map(w=>`<li>${w}</li>`).join("")}</ul></div>` : "";
     $("previewBody").innerHTML=`
-      <div class="kpis" style="margin:6px 0 14px">
+      <div class="kpis" style="margin:6px 0 12px">
         <div class="kpi"><div class="n">${fmt(parsed.communities.length)}</div><div class="l">Communities</div></div>
         <div class="kpi"><div class="n">${fmt(new Set(parsed.vendors.map(v=>v.name)).size)}</div><div class="l">Trade Partners</div></div>
         <div class="kpi"><div class="n">${fmt(parsed.categories.length)}</div><div class="l">Categories</div></div>
         <div class="kpi"><div class="n">${fmt((parsed.startRecords||[]).length)}</div><div class="l">Start records</div></div>
       </div>
-      <p class="tiny" style="text-align:left">Sources: ${uploadFiles.re2?esc(uploadFiles.re2.name):"<i>no RE2 assignment file</i>"} · ${uploadFiles.starts?esc(uploadFiles.starts.name):"<i>no starts file</i>"}</p>
-      <button class="btn" id="publishBtn">Publish — replace ${esc($("adminDiv").selectedOptions[0].text)} data</button>`;
-    $("publishBtn").addEventListener("click",()=>publish(parsed,key));
-    adminMsg("Preview ready. Review counts, then Publish.","ok");
+      ${diffHtml}${warnHtml}
+      <p class="tiny" style="text-align:left">Sources: ${uploadFiles.re2?esc(uploadFiles.re2.name):"<i>no RE2 file</i>"} · ${uploadFiles.starts?esc(uploadFiles.starts.name):"<i>no starts file</i>"}</p>
+      <button class="btn${warns.length?' ghost':''}" id="publishBtn">Publish — replace ${esc($("adminDiv").selectedOptions[0].text)} data</button>`;
+    $("publishBtn").addEventListener("click",()=>{
+      const strip=w=>w.replace(/<[^>]+>/g,"");
+      const msg="Replace ALL "+parsed.division+" data?\n\n"
+        +(diff?`Communities: +${diff.commsAdded} / -${diff.commsRemoved}\nAssignments: +${diff.assignmentsAdded} / -${diff.assignmentsRemoved}\nVendors: +${diff.vendorsAdded} / -${diff.vendorsRemoved}\n`:"First upload for this division.\n")
+        +(warns.length?"\nWarnings:\n- "+warns.map(strip).join("\n- ")+"\n":"")
+        +"\nThis overwrites the current data and cannot be undone.";
+      if(confirm(msg)) publish(parsed,key);
+    });
+    adminMsg(warns.length?"Preview ready — please review the warnings before publishing.":"Preview ready. Review the changes, then Publish.", warns.length?"info":"ok");
   } catch(e){ adminMsg("Parse error: "+e.message,"err"); }
 }
 
@@ -784,13 +831,15 @@ function buildDivision(key, re2wb, startswb){
   // ---- vendors from RE2 ----
   let vendors=[], communities=[], categories=[];
   const commSet=new Map(); // id -> name
+  const diag={divCounts:{},unmatched:new Set(),re2Rows:0,code:(CFG.DIVISIONS.find(d=>d.key===key)||{}).code||key.toUpperCase()};
   if (re2wb){
     const rows=XLSX.utils.sheet_to_json(fixRange(re2wb.Sheets[firstSheet(re2wb)]),{defval:null});
-    const code=(CFG.DIVISIONS.find(d=>d.key===key)||{}).code || key.toUpperCase();
+    const code=diag.code;
     const today=new Date().toISOString().slice(0,10);
     const groups=new Map(); // cat|vendor -> {cat,vendor,tradeCode,bill?,comms:Set}
     for (const r of rows){
-      const div=S(r["Division"]); if (div && code && div.toUpperCase()!==code.toUpperCase()) continue;
+      const div=S(r["Division"]); diag.re2Rows++; if(div) diag.divCounts[div.toUpperCase()]=(diag.divCounts[div.toUpperCase()]||0)+1;
+      if (div && code && div.toUpperCase()!==code.toUpperCase()) continue;
       const vendor=S(r["Supplier Desc"]); const cat=S(r["Trade Desc."])||S(r["Trade Desc"]);
       if(!vendor||!cat||cat===".") continue;
       const exp=xlDate(r["Expired Date"]); if(exp && exp<today) continue; // skip expired
@@ -798,6 +847,7 @@ function buildDivision(key, re2wb, startswb){
       const cidNorm=cid.length>=11?cid.slice(0,7)+"0000":cid;
       const nm=idName[cidNorm]||cleanCommName(S(r["Description"]))||cidNorm;
       commSet.set(cidNorm,nm);
+      if(nm===cidNorm) diag.unmatched.add(cidNorm);
       const gk=cat+"|"+vendor;
       if(!groups.has(gk)) groups.set(gk,{category:cat,name:vendor,tradeCode:S(r["Trade Code"]),supplierCode:S(r["Supplier"]),comms:new Set()});
       if(!groups.get(gk).supplierCode) groups.get(gk).supplierCode=S(r["Supplier"]);
@@ -823,7 +873,8 @@ function buildDivision(key, re2wb, startswb){
   const dr = startRecords.length? {min:startRecords.reduce((a,b)=>b.date<a?b.date:a,startRecords[0].date),
                                    max:startRecords.reduce((a,b)=>b.date>a?b.date:a,startRecords[0].date)} : null;
   return {division:label,code:(CFG.DIVISIONS.find(d=>d.key===key)||{}).code||key.toUpperCase(),key,
-          communities,categories,vendors,startRecords,startsDateRange:dr};
+          communities,categories,vendors,startRecords,startsDateRange:dr,
+          _diag:{divCounts:diag.divCounts,unmatched:[...diag.unmatched],re2Rows:diag.re2Rows,code:diag.code}};
 }
 function cleanCommName(desc){ if(!desc) return null; // strip plan/parenthetical suffixes
   return desc.replace(/\(.*?\)/g,"").replace(/[-*].*$/,"").trim()||null; }
@@ -855,6 +906,7 @@ function diffPayload(prev,next){
 async function publish(parsed,key){
   if (DEMO){ adminMsg("Demo mode: parsing works, but publishing needs the Supabase backend (see SETUP.md). Nothing was saved.","info"); return; }
   adminMsg("Publishing…","info");
+  delete parsed._diag;
   try {
     const {data:prevRow}=await sb.from("division_data").select("payload").eq("key",key).maybeSingle();
     const summary=diffPayload(prevRow&&prevRow.payload,parsed);
