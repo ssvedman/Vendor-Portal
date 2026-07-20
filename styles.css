@@ -63,6 +63,13 @@ main{max-width:var(--maxw);margin:0 auto;padding:22px 24px 60px}
 .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
 .toolbar input[type=text]{max-width:280px}
 .toolbar select{padding:9px 12px;border:1.5px solid var(--line);border-radius:9px;font-size:14px;background:#fff}
+.msel{position:relative;display:inline-block}
+.msel-btn{padding:9px 12px;border:1.5px solid var(--line);border-radius:9px;font-size:14px;background:var(--card);color:var(--navy);font-weight:600;cursor:pointer;min-width:160px;text-align:left}
+.msel-btn::after{content:"▾";float:right;color:var(--muted);margin-left:8px}
+.msel-panel{position:absolute;top:110%;left:0;z-index:130;width:270px;max-height:340px;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:8px}
+.msel-actions{display:flex;gap:8px;justify-content:space-between;padding:2px 4px 8px;border-bottom:1px solid var(--line);margin-bottom:6px}
+.msel-opt{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;font-size:13.5px;color:var(--navy);cursor:pointer}
+.msel-opt:hover{background:var(--blue-050)}
 .count{font-size:13px;color:var(--muted);margin-left:auto}
 .mini{padding:8px 13px;font-size:13px;width:auto;margin-top:0}
 
@@ -87,6 +94,8 @@ tbody tr:hover{background:var(--blue-050)}
 
 .empty{padding:40px;text-align:center;color:var(--muted)}
 .chart-box{padding:18px}
+.chart-h{position:relative;height:240px}
+.chart-h-tall{height:360px}
 canvas{max-width:100%}
 .footer-note{text-align:center;color:var(--muted);font-size:12px;margin-top:30px}
 
