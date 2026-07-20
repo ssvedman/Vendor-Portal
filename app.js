@@ -410,6 +410,7 @@ function viewMatrix(){
       <div class="msel" id="mCatMsel">
         <button type="button" class="msel-btn" id="mCatBtn">All categories</button>
         <div class="msel-panel hidden" id="mCatPanel">
+          <input type="text" class="msel-search" id="mCatSearch" placeholder="Search trades…">
           <div class="msel-actions"><button type="button" class="linkbtn" id="mCatAll">Select all</button><button type="button" class="linkbtn" id="mCatNone">Unselect all</button></div>
           <div class="msel-list">${cats.map(c=>`<label class="msel-opt"><input type="checkbox" value="${esc(c)}" checked>${esc(c)}</label>`).join("")}</div>
         </div>
@@ -417,6 +418,7 @@ function viewMatrix(){
       <div class="msel" id="mCommMsel">
         <button type="button" class="msel-btn" id="mCommBtn">All communities</button>
         <div class="msel-panel hidden" id="mCommPanel">
+          <input type="text" class="msel-search" id="mCommSearch" placeholder="Search communities…">
           <div class="msel-actions"><button type="button" class="linkbtn" id="mCommAll">Select all</button><button type="button" class="linkbtn" id="mCommNone">Unselect all</button></div>
           <div class="msel-list">${[...d.communities].filter(c=>active.has(c.name)).sort((a,b)=>a.name.localeCompare(b.name)).map(c=>`<label class="msel-opt"><input type="checkbox" value="${esc(c.name)}" checked>${esc(commLabel(c.name))}</label>`).join("")}</div>
         </div>
@@ -448,14 +450,17 @@ function viewMatrix(){
       rows.map(v=>{const set=new Set(v.assigned); return [v.name, v.supplierCode||"", v.category||"", vStarts(v), vPct(v), ...comms.map(c=>set.has(c.name)?"X":"")];}));
   };
   $("mSearch").addEventListener("input",render);
-  $("mCatBtn").addEventListener("click",e=>{ e.stopPropagation(); $("mCatPanel").classList.toggle("hidden"); });
-  $("mCatAll").addEventListener("click",()=>{ $("mCatPanel").querySelectorAll("input").forEach(b=>b.checked=true); render(); });
-  $("mCatNone").addEventListener("click",()=>{ $("mCatPanel").querySelectorAll("input").forEach(b=>b.checked=false); render(); });
-  $("mCatPanel").addEventListener("change",render);
-  $("mCommBtn").addEventListener("click",e=>{ e.stopPropagation(); $("mCommPanel").classList.toggle("hidden"); });
-  $("mCommAll").addEventListener("click",()=>{ $("mCommPanel").querySelectorAll("input").forEach(b=>b.checked=true); render(); });
-  $("mCommNone").addEventListener("click",()=>{ $("mCommPanel").querySelectorAll("input").forEach(b=>b.checked=false); render(); });
-  $("mCommPanel").addEventListener("change",render);
+  const visOpts=p=>[...p.querySelectorAll(".msel-opt")].filter(o=>o.style.display!=="none").map(o=>o.querySelector("input"));
+  const wireMsel=(btn,panel,all,none,search,other)=>{ const p=$(panel);
+    $(btn).addEventListener("click",e=>{ e.stopPropagation(); $(other).classList.add("hidden"); p.classList.toggle("hidden"); });
+    $(all).addEventListener("click",()=>{ visOpts(p).forEach(b=>b.checked=true); render(); });
+    $(none).addEventListener("click",()=>{ visOpts(p).forEach(b=>b.checked=false); render(); });
+    p.addEventListener("change",render);
+    $(search).addEventListener("input",()=>{ const qq=$(search).value.trim().toLowerCase();
+      p.querySelectorAll(".msel-opt").forEach(o=>{ o.style.display=(!qq||o.textContent.toLowerCase().includes(qq))?"":"none"; }); });
+  };
+  wireMsel("mCatBtn","mCatPanel","mCatAll","mCatNone","mCatSearch","mCommPanel");
+  wireMsel("mCommBtn","mCommPanel","mCommAll","mCommNone","mCommSearch","mCatPanel");
   if(!window._mselInit){ window._mselInit=true; document.addEventListener("click",ev=>{ document.querySelectorAll(".msel-panel:not(.hidden)").forEach(p=>{ const w=p.closest(".msel"); if(w&&!w.contains(ev.target)) p.classList.add("hidden"); }); }); }
   $("mExport").addEventListener("click",()=>window._expM()); render();
 }

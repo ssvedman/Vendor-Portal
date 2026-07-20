@@ -70,6 +70,10 @@ main{max-width:var(--maxw);margin:0 auto;padding:22px 24px 60px}
 .msel-actions{display:flex;gap:8px;justify-content:space-between;padding:2px 4px 8px;border-bottom:1px solid var(--line);margin-bottom:6px}
 .msel-opt{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;font-size:13.5px;color:var(--navy);cursor:pointer}
 .msel-opt:hover{background:var(--blue-050)}
+.msel-search{width:100%;padding:7px 10px;border:1.5px solid var(--line);border-radius:8px;font-size:13px;margin-bottom:6px;background:var(--card);color:var(--ink)}
+.msel-search:focus{outline:none;border-color:var(--blue)}
+/* matrix hugs left when few communities are selected (don't stretch columns across the screen) */
+table.matrix{width:auto;min-width:0}
 .count{font-size:13px;color:var(--muted);margin-left:auto}
 .mini{padding:8px 13px;font-size:13px;width:auto;margin-top:0}
 
