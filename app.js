@@ -552,7 +552,14 @@ function viewCoverage(){
 
 function coverageByTrade(d,rowsAll,total,byCat,active){
   $("covContent").innerHTML=`
-    ${toolbar(`<input type="text" id="cgSearch" placeholder="Filter trade…">
+    ${toolbar(`<div class="msel" id="cgCatMsel">
+        <button type="button" class="msel-btn" id="cgCatBtn">All trades</button>
+        <div class="msel-panel hidden" id="cgCatPanel">
+          <input type="text" class="msel-search" id="cgCatSearch" placeholder="Search trades…">
+          <div class="msel-actions"><button type="button" class="linkbtn" id="cgCatAll">Select all</button><button type="button" class="linkbtn" id="cgCatNone">Unselect all</button></div>
+          <div class="msel-list">${rowsAll.map(r=>`<label class="msel-opt"><input type="checkbox" value="${esc(r.cat)}" checked>${esc(r.cat)}</label>`).join("")}</div>
+        </div>
+      </div>
       <select id="cgFilter"><option value="risk">All Risks</option><option value="all">All trades</option>
         <option value="single">Single-source only</option><option value="core">Core trades only</option></select>
       <button class="btn mini ghost" id="cgExport">Export CSV</button><span class="count" id="cgCount"></span>`)}
@@ -562,12 +569,15 @@ function coverageByTrade(d,rowsAll,total,byCat,active){
     : r.risk==="limited"?'<span class="risk risk-l">Limited</span>'
     : '<span class="risk risk-ok">OK</span>';
   const render=()=>{
-    const q=$("cgSearch").value.trim().toLowerCase(), f=$("cgFilter").value;
+    const f=$("cgFilter").value;
+    const cb=[...$("cgCatPanel").querySelectorAll("input[type=checkbox]")];
+    const selCat=new Set(cb.filter(b=>b.checked).map(b=>b.value)); const allCat=selCat.size===cb.length;
+    $("cgCatBtn").textContent=allCat?"All trades":(selCat.size===0?"No trades":selCat.size+" trades");
     let rows=rowsAll.slice();
     if(f==="risk") rows=rows.filter(r=>r.risk==="single-source"||r.risk==="gaps");
     else if(f==="single") rows=rows.filter(r=>r.vendors===1);
     else if(f==="core") rows=rows.filter(r=>r.core);
-    if(q) rows=rows.filter(r=>r.cat.toLowerCase().includes(q));
+    if(!allCat) rows=rows.filter(r=>selCat.has(r.cat));
     rows.sort((a,b)=>(b.core-a.core)||b.missing.length-a.missing.length || a.cat.localeCompare(b.cat));
     $("cgCount").textContent=`${rows.length} trades`;
     $("cgBody").innerHTML=rows.length? rows.map((r,i)=>{
@@ -590,7 +600,9 @@ function coverageByTrade(d,rowsAll,total,byCat,active){
     window._exp=()=>exportCSV(`${d.key}_coverage_by_trade`,["Trade","Core","Vendors","Trade partners","Covered","Total","Status","Missing communities"],
       rows.map(r=>{const vs=byCat[r.cat]?[...byCat[r.cat].vendors].sort():[]; return [r.cat,r.core?"yes":"no",r.vendors,vs.join("; "),r.covered,total,r.risk,r.missing.join("; ")];}));
   };
-  $("cgSearch").addEventListener("input",render); $("cgFilter").addEventListener("change",render);
+  wireMsel("cgCatBtn","cgCatPanel","cgCatAll","cgCatNone","cgCatSearch",null,render);
+  $("cgFilter").addEventListener("change",render);
+  window._cgSelect=cat=>{ [...$("cgCatPanel").querySelectorAll("input[type=checkbox]")].forEach(b=>b.checked=(b.value===cat)); $("cgFilter").value="all"; render(); };
   $("cgExport").addEventListener("click",()=>window._exp()); render();
 }
 
@@ -598,15 +610,25 @@ function coverageByCommunity(d,active,coreCats,byCat){
   const commRows=active.map(c=>{ const missing=coreCats.filter(cat=>!byCat[cat].comms.has(c));
     return {community:c, gaps:missing.length, missing}; });
   $("covContent").innerHTML=`
-    ${toolbar(`<input type="text" id="ccSearch" placeholder="Filter community…">
+    ${toolbar(`<div class="msel" id="ccCommMsel">
+        <button type="button" class="msel-btn" id="ccCommBtn">All communities</button>
+        <div class="msel-panel hidden" id="ccCommPanel">
+          <input type="text" class="msel-search" id="ccCommSearch" placeholder="Search communities…">
+          <div class="msel-actions"><button type="button" class="linkbtn" id="ccCommAll">Select all</button><button type="button" class="linkbtn" id="ccCommNone">Unselect all</button></div>
+          <div class="msel-list">${active.map(c=>`<label class="msel-opt"><input type="checkbox" value="${esc(c)}" checked>${esc(commLabel(c))}</label>`).join("")}</div>
+        </div>
+      </div>
       <select id="ccFilter"><option value="gaps">With gaps only</option><option value="all">All communities</option></select>
       <button class="btn mini ghost" id="ccExport">Export CSV</button><span class="count" id="ccCount"></span>`)}
     <div id="ccBody"></div>`;
   const render=()=>{
-    const q=$("ccSearch").value.trim().toLowerCase(), f=$("ccFilter").value;
+    const f=$("ccFilter").value;
+    const cb=[...$("ccCommPanel").querySelectorAll("input[type=checkbox]")];
+    const selC=new Set(cb.filter(b=>b.checked).map(b=>b.value)); const allC=selC.size===cb.length;
+    $("ccCommBtn").textContent=allC?"All communities":(selC.size===0?"No communities":selC.size+" communities");
     let rows=commRows.slice();
     if(f!=="all") rows=rows.filter(r=>r.gaps>0);
-    if(q) rows=rows.filter(r=>r.community.toLowerCase().includes(q));
+    if(!allC) rows=rows.filter(r=>selC.has(r.community));
     if(f==="all") rows.sort((a,b)=>a.community.localeCompare(b.community));
     else rows.sort((a,b)=>b.gaps-a.gaps || a.community.localeCompare(b.community));
     $("ccCount").textContent=`${rows.length} communities`;
@@ -623,7 +645,8 @@ function coverageByCommunity(d,active,coreCats,byCat){
     window._exp=()=>exportCSV(`${d.key}_coverage_by_community`,["Community","Gaps found","Missing core trades"],
       rows.map(r=>[r.community,r.gaps,r.missing.join("; ")]));
   };
-  $("ccSearch").addEventListener("input",render); $("ccFilter").addEventListener("change",render);
+  wireMsel("ccCommBtn","ccCommPanel","ccCommAll","ccCommNone","ccCommSearch",null,render);
+  $("ccFilter").addEventListener("change",render);
   $("ccExport").addEventListener("click",()=>window._exp()); render();
 }
 
@@ -720,7 +743,7 @@ function jumpTo(type,val){
   showDashboard();
   if(type==="community"){ activateTab("community"); renderView(); const s=$("commPick"); if(s){s.value=val; s.dispatchEvent(new Event("change"));} }
   else if(type==="vendor"){ activateTab("vendor"); renderView(); if(window._vSelect) window._vSelect(val); }
-  else if(type==="category"){ activateTab("coverage"); renderView(); const s=$("cgSearch"); if(s){s.value=val; $("cgFilter").value="all"; s.dispatchEvent(new Event("input"));} }
+  else if(type==="category"){ activateTab("coverage"); coverageMode="trade"; renderView(); if(window._cgSelect) window._cgSelect(val); }
 }
 
 /* ---------------- CSV ---------------- */
