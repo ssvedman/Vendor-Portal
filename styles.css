@@ -66,10 +66,16 @@ main{max-width:var(--maxw);margin:0 auto;padding:22px 24px 60px}
 .msel{position:relative;display:inline-block}
 .msel-btn{padding:9px 12px;border:1.5px solid var(--line);border-radius:9px;font-size:14px;background:var(--card);color:var(--navy);font-weight:600;cursor:pointer;min-width:160px;text-align:left}
 .msel-btn::after{content:"▾";float:right;color:var(--muted);margin-left:8px}
-.msel-panel{position:absolute;top:110%;left:0;z-index:130;width:270px;max-height:340px;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:8px}
+.msel-panel{position:absolute;top:110%;left:0;z-index:130;width:270px;overflow:hidden;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:8px}
+.msel-list{max-height:232px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.msel-list::-webkit-scrollbar{width:8px}
+.msel-list::-webkit-scrollbar-track{background:transparent;margin:2px 0}
+.msel-list::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
+.msel-list::-webkit-scrollbar-thumb:hover{background:var(--muted)}
 .msel-actions{display:flex;gap:8px;justify-content:space-between;padding:2px 4px 8px;border-bottom:1px solid var(--line);margin-bottom:6px}
 .msel-opt{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;font-size:13.5px;color:var(--navy);cursor:pointer}
 .msel-opt:hover{background:var(--blue-050)}
+.msel-opt.sel{background:var(--blue-050);font-weight:700}
 .msel-search{width:100%;padding:7px 10px;border:1.5px solid var(--line);border-radius:8px;font-size:13px;margin-bottom:6px;background:var(--card);color:var(--ink)}
 .msel-search:focus{outline:none;border-color:var(--blue)}
 /* matrix hugs left when few communities are selected (don't stretch columns across the screen) */
@@ -99,7 +105,9 @@ tbody tr:hover{background:var(--blue-050)}
 .empty{padding:40px;text-align:center;color:var(--muted)}
 .chart-box{padding:18px}
 .chart-h{position:relative;height:240px}
-.chart-h-tall{height:360px}
+.chart-h-tall{height:380px}
+.starts-charts{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+@media (max-width:820px){ .starts-charts{grid-template-columns:1fr} }
 canvas{max-width:100%}
 .footer-note{text-align:center;color:var(--muted);font-size:12px;margin-top:30px}
 

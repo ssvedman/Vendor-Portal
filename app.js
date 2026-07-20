@@ -321,6 +321,15 @@ function renderView(){
     coverage:viewCoverage,starts:viewStarts,history:viewHistory}[state.view]||viewByCommunity)();
 }
 const toolbar = inner => `<div class="toolbar">${inner}</div>`;
+function mselVisOpts(p){ return [...p.querySelectorAll(".msel-opt")].filter(o=>o.style.display!=="none").map(o=>o.querySelector("input")); }
+function wireMsel(btn,panel,all,none,search,other,onChange){ const p=$(panel); if(!p) return;
+  $(btn).addEventListener("click",e=>{ e.stopPropagation(); document.querySelectorAll(".msel-panel:not(.hidden)").forEach(o=>{ if(o!==p) o.classList.add("hidden"); }); p.classList.toggle("hidden"); });
+  $(all).addEventListener("click",()=>{ mselVisOpts(p).forEach(b=>b.checked=true); onChange(); });
+  $(none).addEventListener("click",()=>{ mselVisOpts(p).forEach(b=>b.checked=false); onChange(); });
+  p.addEventListener("change",onChange);
+  $(search).addEventListener("input",()=>{ const qq=$(search).value.trim().toLowerCase(); p.querySelectorAll(".msel-opt").forEach(o=>{ o.style.display=(!qq||o.textContent.toLowerCase().includes(qq))?"":"none"; }); });
+}
+document.addEventListener("click",ev=>{ document.querySelectorAll(".msel-panel:not(.hidden)").forEach(p=>{ const w=p.closest(".msel"); if(w&&!w.contains(ev.target)) p.classList.add("hidden"); }); });
 function commId(name){ const c=(state.data.communities||[]).find(x=>x.name===name); return c && c.id ? c.id : null; }
 function shortId(id){ return id ? String(id).replace(/0000$/,"") : id; }
 function commLabel(name){ const id=commId(name); return id ? name+" ("+shortId(id)+")" : name; }
@@ -336,14 +345,24 @@ function viewByCommunity(){
   if(!comms.length){ $("viewArea").innerHTML=`<div class="empty">No communities have starts in the selected date range — widen the range above.</div>`; return; }
   $("viewArea").innerHTML=`
     ${toolbar(`<select id="commPick">${comms.map(c=>`<option value="${esc(c.name)}">${esc(commLabel(c.name))}</option>`).join("")}</select>
-      <input type="text" id="commSearch" placeholder="Filter vendors / trades…">
+      <div class="msel" id="bcCatMsel">
+        <button type="button" class="msel-btn" id="bcCatBtn">All trades</button>
+        <div class="msel-panel hidden" id="bcCatPanel">
+          <input type="text" class="msel-search" id="bcCatSearch" placeholder="Search trades…">
+          <div class="msel-actions"><button type="button" class="linkbtn" id="bcCatAll">Select all</button><button type="button" class="linkbtn" id="bcCatNone">Unselect all</button></div>
+          <div class="msel-list">${d.categories.map(c=>`<label class="msel-opt"><input type="checkbox" value="${esc(c)}" checked>${esc(c)}</label>`).join("")}</div>
+        </div>
+      </div>
       <button class="btn mini ghost" id="commExport">Export CSV</button>
       <span class="count" id="commCount"></span>`)}
     <div class="panel"><div id="commBody"></div></div>`;
   const render=()=>{
-    const comm=$("commPick").value, q=$("commSearch").value.trim().toLowerCase();
+    const comm=$("commPick").value;
+    const cbx=[...$("bcCatPanel").querySelectorAll("input[type=checkbox]")];
+    const selCat=new Set(cbx.filter(b=>b.checked).map(b=>b.value)); const allCat=selCat.size===cbx.length;
+    $("bcCatBtn").textContent=allCat?"All trades":(selCat.size===0?"No trades":selCat.size+" trades");
     let rows=d.vendors.filter(v=>v.assigned.includes(comm));
-    if(q) rows=rows.filter(v=>(v.name+" "+(v.category||"")+" "+(v.tradeCode||"")).toLowerCase().includes(q));
+    if(!allCat) rows=rows.filter(v=>selCat.has(v.category));
     rows.sort((a,b)=>(a.category||"").localeCompare(b.category||"")||a.name.localeCompare(b.name));
     $("commCount").textContent=`${rows.length} vendors serving ${commLabel(comm)}`;
     $("commBody").innerHTML=rows.length?`<div class="table-wrap"><table>
@@ -353,7 +372,8 @@ function viewByCommunity(){
       :`<div class="empty">No vendors match.</div>`;
     window._exp=()=>exportCSV(`${comm}_vendors`,["Category","Trade Partner","Supplier #","Trade Code"],rows.map(v=>[v.category,v.name,v.supplierCode,v.tradeCode]));
   };
-  $("commPick").addEventListener("change",render); $("commSearch").addEventListener("input",render);
+  $("commPick").addEventListener("change",render);
+  wireMsel("bcCatBtn","bcCatPanel","bcCatAll","bcCatNone","bcCatSearch",null,render);
   $("commExport").addEventListener("click",()=>window._exp()); render();
 }
 
@@ -368,17 +388,23 @@ function viewByVendor(){
   const label=v=>((v.category||"—")+" — "+v.name+(v.supplierCode?"  #"+v.supplierCode:""));
   const allOpts=src.map((v,i)=>({i,text:label(v).toLowerCase()}));
   $("viewArea").innerHTML=`
-    ${toolbar(`<input type="text" id="vSearch" placeholder="Filter trade partners…" style="max-width:260px">
-      <select id="vPick" style="max-width:440px;flex:1"></select>
+    ${toolbar(`<div class="msel" id="vSelMsel" style="max-width:440px;flex:1">
+        <button type="button" class="msel-btn" id="vSelBtn">Select trade partner…</button>
+        <div class="msel-panel hidden" id="vSelPanel">
+          <input type="text" class="msel-search" id="vSelSearch" placeholder="Search trade partners…">
+          <div class="msel-list" id="vSelList"></div>
+        </div>
+      </div>
       <button class="btn mini ghost" id="vExport">Export CSV</button>`)}
     <div class="panel"><div class="panel-h" id="vTitle"></div><div class="table-wrap" id="vBody"></div></div>`;
-  const fillSelect=()=>{
-    const q=$("vSearch").value.trim().toLowerCase();
+  let curIdx=0;
+  const buildList=()=>{
+    const q=$("vSelSearch").value.trim().toLowerCase();
     const list=allOpts.filter(o=>!q||o.text.includes(q));
-    $("vPick").innerHTML=(list.length?list:allOpts).map(o=>`<option value="${o.i}">${esc(label(src[o.i]))}</option>`).join("");
+    $("vSelList").innerHTML=(list.length?list:allOpts).map(o=>`<div class="msel-opt vsel-opt${o.i===curIdx?" sel":""}" data-i="${o.i}">${esc(label(src[o.i]))}</div>`).join("");
   };
   const render=()=>{
-    const v=src[+$("vPick").value||0]; if(!v) return;
+    const v=src[curIdx]; if(!v) return;
     const comms=[...v.assigned].sort();
     const monTotals=monthLabels.map((_,mi)=>comms.reduce((s,c)=>s+((byComm[c]&&byComm[c].values[mi])||0),0));
     const grand=monTotals.reduce((a,b)=>a+b,0);
@@ -391,10 +417,13 @@ function viewByVendor(){
     window._exp=()=>exportCSV(`${d.key}_${v.name}_starts`,["Community","Comm",...monthLabels,"Total"],
       comms.map(c=>{const row=byComm[c]||{values:[],total:0}; return [c,commId(c)||"",...monthLabels.map((_,mi)=>row.values[mi]||0),row.total||0];}));
   };
-  $("vSearch").addEventListener("input",()=>{ fillSelect(); render(); });
-  $("vPick").addEventListener("change",render);
+  $("vSelBtn").addEventListener("click",e=>{ e.stopPropagation(); document.querySelectorAll(".msel-panel:not(.hidden)").forEach(p=>{ if(p!==$("vSelPanel")) p.classList.add("hidden"); }); const hid=$("vSelPanel").classList.toggle("hidden"); if(!hid){ buildList(); $("vSelSearch").focus(); } });
+  $("vSelSearch").addEventListener("input",buildList);
+  $("vSelList").addEventListener("click",e=>{ const o=e.target.closest(".vsel-opt"); if(!o) return; curIdx=+o.dataset.i; $("vSelBtn").textContent=label(src[curIdx]); $("vSelPanel").classList.add("hidden"); render(); });
+  if(src[0]) $("vSelBtn").textContent=label(src[0]);
+  window._vSelect=name=>{ const idx=src.findIndex(v=>v.name===name); if(idx>=0){ curIdx=idx; $("vSelBtn").textContent=label(src[curIdx]); render(); } };
   $("vExport").addEventListener("click",()=>window._exp());
-  fillSelect(); render();
+  render();
 }
 
 /* --- Full Matrix --- */
@@ -405,8 +434,16 @@ function viewMatrix(){
   const vStarts=v=>v.assigned.reduce((s,c)=>s+(byComm[c]||0),0);
   const vPct=v=>totalStarts?Math.round(vStarts(v)/totalStarts*1000)/10:0;
   const cats=[...new Set(src.map(v=>v.category).filter(Boolean))].sort();
+  const vens=[...new Set(src.map(v=>v.name))].sort((a,b)=>a.localeCompare(b));
   $("viewArea").innerHTML=`
-    ${toolbar(`<input type="text" id="mSearch" placeholder="Search vendor…">
+    ${toolbar(`<div class="msel" id="mVenMsel">
+        <button type="button" class="msel-btn" id="mVenBtn">All vendors</button>
+        <div class="msel-panel hidden" id="mVenPanel">
+          <input type="text" class="msel-search" id="mVenSearch" placeholder="Search vendors…">
+          <div class="msel-actions"><button type="button" class="linkbtn" id="mVenAll">Select all</button><button type="button" class="linkbtn" id="mVenNone">Unselect all</button></div>
+          <div class="msel-list">${vens.map(n=>`<label class="msel-opt"><input type="checkbox" value="${esc(n)}" checked>${esc(n)}</label>`).join("")}</div>
+        </div>
+      </div>
       <div class="msel" id="mCatMsel">
         <button type="button" class="msel-btn" id="mCatBtn">All categories</button>
         <div class="msel-panel hidden" id="mCatPanel">
@@ -426,7 +463,9 @@ function viewMatrix(){
       <button class="btn mini ghost" id="mExport">Export CSV</button><span class="count" id="mCount"></span>`)}
     <div class="panel"><div class="table-wrap" id="mBody"></div></div>`;
   const render=()=>{
-    const q=$("mSearch").value.trim().toLowerCase();
+    const vboxes=[...$("mVenPanel").querySelectorAll("input[type=checkbox]")];
+    const selVen=new Set(vboxes.filter(b=>b.checked).map(b=>b.value)); const allVen=selVen.size===vboxes.length;
+    $("mVenBtn").textContent=allVen?"All vendors":(selVen.size===0?"No vendors":selVen.size+" of "+vens.length+" vendors");
     const boxes=[...$("mCatPanel").querySelectorAll("input[type=checkbox]")];
     const selCats=new Set(boxes.filter(b=>b.checked).map(b=>b.value)); const allSel=selCats.size===cats.length;
     $("mCatBtn").textContent=allSel?"All categories":(selCats.size===0?"No categories":selCats.size+" of "+cats.length+" trades");
@@ -434,8 +473,8 @@ function viewMatrix(){
     const selComm=new Set(cboxes.filter(b=>b.checked).map(b=>b.value)); const allComm=selComm.size===cboxes.length;
     $("mCommBtn").textContent=allComm?"All communities":(selComm.size===0?"No communities":selComm.size+" communities");
     let rows=src.slice();
+    if(!allVen) rows=rows.filter(v=>selVen.has(v.name));
     if(!allSel) rows=rows.filter(v=>selCats.has(v.category));
-    if(q) rows=rows.filter(v=>v.name.toLowerCase().includes(q));
     if(!allComm) rows=rows.filter(v=>v.assigned.some(c=>selComm.has(c)));
     let comms=(allComm?[...d.communities].filter(c=>active.has(c.name)):[...d.communities].filter(c=>selComm.has(c.name))).sort((a,b)=>a.name.localeCompare(b.name));
     rows.sort((a,b)=>(a.category||"").localeCompare(b.category||"")||a.name.localeCompare(b.name));
@@ -449,19 +488,9 @@ function viewMatrix(){
       ["Trade Partner","Supplier #","Trade Category","Starts (range)","% of starts",...comms.map(c=>commLabel(c.name))],
       rows.map(v=>{const set=new Set(v.assigned); return [v.name, v.supplierCode||"", v.category||"", vStarts(v), vPct(v), ...comms.map(c=>set.has(c.name)?"X":"")];}));
   };
-  $("mSearch").addEventListener("input",render);
-  const visOpts=p=>[...p.querySelectorAll(".msel-opt")].filter(o=>o.style.display!=="none").map(o=>o.querySelector("input"));
-  const wireMsel=(btn,panel,all,none,search,other)=>{ const p=$(panel);
-    $(btn).addEventListener("click",e=>{ e.stopPropagation(); $(other).classList.add("hidden"); p.classList.toggle("hidden"); });
-    $(all).addEventListener("click",()=>{ visOpts(p).forEach(b=>b.checked=true); render(); });
-    $(none).addEventListener("click",()=>{ visOpts(p).forEach(b=>b.checked=false); render(); });
-    p.addEventListener("change",render);
-    $(search).addEventListener("input",()=>{ const qq=$(search).value.trim().toLowerCase();
-      p.querySelectorAll(".msel-opt").forEach(o=>{ o.style.display=(!qq||o.textContent.toLowerCase().includes(qq))?"":"none"; }); });
-  };
-  wireMsel("mCatBtn","mCatPanel","mCatAll","mCatNone","mCatSearch","mCommPanel");
-  wireMsel("mCommBtn","mCommPanel","mCommAll","mCommNone","mCommSearch","mCatPanel");
-  if(!window._mselInit){ window._mselInit=true; document.addEventListener("click",ev=>{ document.querySelectorAll(".msel-panel:not(.hidden)").forEach(p=>{ const w=p.closest(".msel"); if(w&&!w.contains(ev.target)) p.classList.add("hidden"); }); }); }
+  wireMsel("mVenBtn","mVenPanel","mVenAll","mVenNone","mVenSearch",null,render);
+  wireMsel("mCatBtn","mCatPanel","mCatAll","mCatNone","mCatSearch",null,render);
+  wireMsel("mCommBtn","mCommPanel","mCommAll","mCommNone","mCommSearch",null,render);
   $("mExport").addEventListener("click",()=>window._expM()); render();
 }
 
@@ -608,26 +637,39 @@ function viewStarts(){
   const totalsByMonth=agg.months.map((_,i)=>agg.rows.reduce((s,r)=>s+r.values[i],0));
   const topComm=[...agg.rows].sort((a,b)=>b.total-a.total).slice(0,12);
   $("viewArea").innerHTML=`
-    <div class="panel" style="margin-bottom:16px"><div class="panel-h">Starts per month — ${esc(d.division)} <span class="range-note">${state.range.from} → ${state.range.to}</span></div>
-      <div class="chart-box"><div class="chart-h"><canvas id="chMonth"></canvas></div></div></div>
-    <div class="panel" style="margin-bottom:16px"><div class="panel-h">Top communities by starts (in range)</div>
-      <div class="chart-box"><div class="chart-h chart-h-tall"><canvas id="chComm"></canvas></div></div></div>
-    ${toolbar(`<input type="text" id="sSearch" placeholder="Filter community…"><button class="btn mini ghost" id="sExport">Export CSV</button><span class="count" id="sCount"></span>`)}
+    <div class="starts-charts">
+      <div class="panel"><div class="panel-h">Starts per month — ${esc(d.division)} <span class="range-note">${state.range.from} → ${state.range.to}</span></div>
+        <div class="chart-box"><div class="chart-h chart-h-tall"><canvas id="chMonth"></canvas></div></div></div>
+      <div class="panel"><div class="panel-h">Top communities by starts (in range)</div>
+        <div class="chart-box"><div class="chart-h chart-h-tall"><canvas id="chComm"></canvas></div></div></div>
+    </div>
+    ${toolbar(`<div class="msel" id="sCommMsel">
+        <button type="button" class="msel-btn" id="sCommBtn">All communities</button>
+        <div class="msel-panel hidden" id="sCommPanel">
+          <input type="text" class="msel-search" id="sCommSearch" placeholder="Search communities…">
+          <div class="msel-actions"><button type="button" class="linkbtn" id="sCommAll">Select all</button><button type="button" class="linkbtn" id="sCommNone">Unselect all</button></div>
+          <div class="msel-list">${agg.rows.map(r=>`<label class="msel-opt"><input type="checkbox" value="${esc(r.community)}" checked>${esc(commLabel(r.community))}</label>`).join("")}</div>
+        </div>
+      </div><button class="btn mini ghost" id="sExport">Export CSV</button><span class="count" id="sCount"></span>`)}
     <div class="panel"><div class="table-wrap" id="sBody"></div></div>`;
   if (window.Chart){
     charts.push(new Chart($("chMonth"),{type:"bar",data:{labels:monthLabels,datasets:[{label:"Starts",data:totalsByMonth,backgroundColor:"#0057b8"}]},options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}}));
     charts.push(new Chart($("chComm"),{type:"bar",data:{labels:topComm.map(c=>c.community),datasets:[{label:"Starts",data:topComm.map(c=>c.total),backgroundColor:"#0a2540"}]},options:{responsive:true,maintainAspectRatio:false,animation:false,indexAxis:"y",plugins:{legend:{display:false}},scales:{x:{beginAtZero:true}}}}));
   }
   const render=()=>{
-    const q=$("sSearch").value.trim().toLowerCase();
-    let rows=agg.rows.filter(r=>!q||r.community.toLowerCase().includes(q));
-    $("sCount").textContent=`${rows.length} communities • ${agg.total} starts`;
+    const cbx=[...$("sCommPanel").querySelectorAll("input[type=checkbox]")];
+    const sel=new Set(cbx.filter(b=>b.checked).map(b=>b.value)); const allSel=sel.size===cbx.length;
+    $("sCommBtn").textContent=allSel?"All communities":(sel.size===0?"No communities":sel.size+" communities");
+    let rows=allSel?agg.rows.slice():agg.rows.filter(r=>sel.has(r.community));
+    $("sCount").textContent=`${rows.length} communities • ${fmt(rows.reduce((s,r)=>s+r.total,0))} starts`;
     $("sBody").innerHTML=rows.length?`<table><thead><tr><th class="sticky">Community</th>${monthLabels.map(m=>`<th class="num">${esc(m)}</th>`).join("")}<th class="num">Total</th></tr></thead>
       <tbody>${rows.map(r=>`<tr><td class="sticky">${esc(commLabel(r.community))}</td>${r.values.map(v=>`<td class="num">${v||0}</td>`).join("")}<td class="num"><b>${r.total}</b></td></tr>`).join("")}</tbody></table>`
       :`<div class="empty">No starts in this date range.</div>`;
     window._exp=()=>exportCSV(`${d.key}_starts`,["Community",...monthLabels,"Total"],rows.map(r=>[r.community,...r.values,r.total]));
   };
-  $("sSearch").addEventListener("input",render); $("sExport").addEventListener("click",()=>window._exp()); render();
+  $("sExport").addEventListener("click",()=>window._exp());
+  wireMsel("sCommBtn","sCommPanel","sCommAll","sCommNone","sCommSearch",null,render);
+  render();
 }
 
 /* --- History (admin) --- */
@@ -677,7 +719,7 @@ function activateTab(view){ document.querySelectorAll(".tab").forEach(t=>{t.clas
 function jumpTo(type,val){
   showDashboard();
   if(type==="community"){ activateTab("community"); renderView(); const s=$("commPick"); if(s){s.value=val; s.dispatchEvent(new Event("change"));} }
-  else if(type==="vendor"){ activateTab("vendor"); renderView(); const s=$("vSearch"); if(s){s.value=val; s.dispatchEvent(new Event("input"));} }
+  else if(type==="vendor"){ activateTab("vendor"); renderView(); if(window._vSelect) window._vSelect(val); }
   else if(type==="category"){ activateTab("coverage"); renderView(); const s=$("cgSearch"); if(s){s.value=val; $("cgFilter").value="all"; s.dispatchEvent(new Event("input"));} }
 }
 
