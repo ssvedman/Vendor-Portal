@@ -135,6 +135,9 @@ async function enterApp(email){
   ["change","input"].forEach(ev=>{ $("fromDate").addEventListener(ev,onRange); $("toDate").addEventListener(ev,onRange); });
   $("rangeReset").addEventListener("click",()=>{ state.range={...CFG.DEFAULT_RANGE};
     $("fromDate").value=state.range.from; $("toDate").value=state.range.to; savePrefs(); renderAll(); });
+  $("range6mo").addEventListener("click",()=>{ const pad=n=>String(n).padStart(2,"0"); const fmtD=x=>`${x.getFullYear()}-${pad(x.getMonth()+1)}-${pad(x.getDate())}`;
+    const a=new Date(), b=new Date(); b.setMonth(b.getMonth()+6);
+    state.range={from:fmtD(a),to:fmtD(b)}; $("fromDate").value=state.range.from; $("toDate").value=state.range.to; savePrefs(); renderAll(); });
 
   // tabs
   document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
