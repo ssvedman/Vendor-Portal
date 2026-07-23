@@ -136,7 +136,7 @@ async function enterApp(email){
   $("rangeReset").addEventListener("click",()=>{ state.range={...CFG.DEFAULT_RANGE};
     $("fromDate").value=state.range.from; $("toDate").value=state.range.to; savePrefs(); renderAll(); });
   $("range6mo").addEventListener("click",()=>{ const pad=n=>String(n).padStart(2,"0"); const fmtD=x=>`${x.getFullYear()}-${pad(x.getMonth()+1)}-${pad(x.getDate())}`;
-    const a=new Date(), b=new Date(); b.setMonth(b.getMonth()+6);
+    const n=new Date(); const a=new Date(n.getFullYear(),n.getMonth(),1); const b=new Date(n.getFullYear(),n.getMonth()+7,0);
     state.range={from:fmtD(a),to:fmtD(b)}; $("fromDate").value=state.range.from; $("toDate").value=state.range.to; savePrefs(); renderAll(); });
 
   // tabs
