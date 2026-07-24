@@ -183,8 +183,10 @@ async function loadDivision(key){
 function renderAll(){ renderBanner(); renderKPIs(); updateWarnBadge(); renderView(); }
 /* Warnings: a community with >1 supplier for the same trade scope */
 function computeWarnings(d){
+  const inR=rangeCommSet();
   const byComm={};
   (d.vendors||[]).forEach(v=>{ if(!v.category) return; (v.assigned||[]).forEach(c=>{
+    if(!inR.has(c)) return;
     (byComm[c]=byComm[c]||{}); (byComm[c][v.category]=byComm[c][v.category]||[]).push(v); }); });
   const warns=[];
   Object.keys(byComm).forEach(c=>Object.keys(byComm[c]).forEach(cat=>{
