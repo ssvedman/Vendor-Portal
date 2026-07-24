@@ -343,6 +343,14 @@ tbody tr.totalrow:hover td{background:#eef4fb}
 .modal-h{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line);font-weight:700;color:var(--navy)}
 .modal-body{padding:16px 18px;overflow:auto}
 
+/* ---------- Site footer ---------- */
+.site-foot{display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:18px 24px 26px;margin-top:8px;font-size:12px;color:var(--muted);
+  border-top:1px solid var(--line)}
+.site-foot .dot{color:var(--line)}
+.site-foot a{color:var(--blue);text-decoration:none;font-weight:600}
+.site-foot a:hover{text-decoration:underline}
+
 /* ---------- Dark mode ---------- */
 [data-theme="dark"]{
   --navy:#e7ecf4; --ink:#e7ecf4; --muted:#9aa7ba; --line:#2a3547;
