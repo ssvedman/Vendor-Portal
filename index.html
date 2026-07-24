@@ -35,6 +35,7 @@
 <div id="app" class="hidden">
   <header class="topbar">
     <div class="topbar-in">
+      <button class="nav-btn" id="navBtn" title="Menu" aria-label="Open menu"><span></span><span></span><span></span></button>
       <button class="home-logo" id="homeLogo" title="Home"><img src="logo.svg" alt="Vendor Assignments — home"></button>
       <span class="title">Vendor Assignments</span>
       <select id="divisionSel"></select>
@@ -67,7 +68,6 @@
   <main>
     <section id="dashboard">
       <div class="kpis" id="kpis"></div>
-      <button class="tabmenu-btn" id="tabMenuBtn" aria-expanded="false"><span id="tabMenuCur">By Community</span><span class="tabmenu-ic">&#9776;</span></button>
       <div class="tabs" id="tabsWrap">
         <button class="tab active" data-view="community">By Community</button>
         <button class="tab" data-view="vendor">By Vendor</button>
@@ -123,6 +123,23 @@
     <span class="dot">&middot;</span>
     <a href="mailto:stephen.svedman@lennar.com?subject=Vendor%20Assignments%20feedback" id="feedbackLink">Send feedback</a>
   </footer>
+
+  <div id="navScrim" class="nav-scrim hidden"></div>
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-h">
+      <img src="logo.svg" alt="" class="sidebar-logo"><span>Vendor Assignments</span>
+      <button class="nav-close" id="navClose" aria-label="Close menu">&times;</button>
+    </div>
+    <nav class="sidebar-nav" id="sidebarNav">
+      <button class="side-tab" data-view="community">By Community</button>
+      <button class="side-tab" data-view="vendor">By Vendor</button>
+      <button class="side-tab" data-view="matrix">Full Matrix</button>
+      <button class="side-tab" data-view="coverage">Coverage Gaps</button>
+      <button class="side-tab" data-view="warnings">Warnings</button>
+      <button class="side-tab" data-view="starts">Starts</button>
+    </nav>
+    <div class="sidebar-slot" id="sidebarSlot"></div>
+  </aside>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>

@@ -140,12 +140,24 @@ async function enterApp(email){
     state.range={from:fmtD(a),to:fmtD(b)}; $("fromDate").value=state.range.from; $("toDate").value=state.range.to; savePrefs(); renderAll(); });
 
   // tabs
-  document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
-    document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
-    t.classList.add("active"); state.view=t.dataset.view; savePrefs(); syncTabMenu(); renderView(); }));
+  const selectView=v=>{ document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.view===v)); state.view=v; savePrefs(); syncTabMenu(); renderView(); };
+  document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>selectView(t.dataset.view)));
+  document.querySelectorAll(".side-tab").forEach(t=>t.addEventListener("click",()=>selectView(t.dataset.view)));
   document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.view===state.view));
-  $("tabMenuBtn").addEventListener("click",e=>{ e.stopPropagation(); $("tabsWrap").classList.toggle("open"); });
-  document.addEventListener("click",e=>{ const w=$("tabsWrap"),b=$("tabMenuBtn"); if(w&&b&&!w.contains(e.target)&&!b.contains(e.target)) w.classList.remove("open"); });
+  $("navBtn").addEventListener("click",openSidebar);
+  $("navClose").addEventListener("click",closeSidebar);
+  $("navScrim").addEventListener("click",closeSidebar);
+  // On mobile, relocate the division selector + top actions into the sidebar so the topbar stays a single row
+  (function(){ const divSel=$("divisionSel"), acts=document.querySelector(".topbar-actions"), slot=$("sidebarSlot");
+    if(divSel&&acts&&slot){
+      const m1=document.createComment("dsel"); divSel.parentNode.insertBefore(m1,divSel);
+      const m2=document.createComment("acts"); acts.parentNode.insertBefore(m2,acts);
+      const mq=matchMedia("(max-width:820px)");
+      const apply=()=>{ if(mq.matches){ slot.appendChild(divSel); slot.appendChild(acts); } else { m1.after(divSel); m2.after(acts); } };
+      if(mq.addEventListener) mq.addEventListener("change",apply); else mq.addListener(apply);
+      apply();
+    }
+  })();
   syncTabMenu();
 
   $("logoutBtn").addEventListener("click",logout);
@@ -368,8 +380,9 @@ function renderView(){
   ({community:viewByCommunity,vendor:viewByVendor,matrix:viewMatrix,
     coverage:viewCoverage,warnings:viewWarnings,starts:viewStarts,history:viewHistory}[state.view]||viewByCommunity)();
 }
-const TAB_LABELS={community:"By Community",vendor:"By Vendor",matrix:"Full Matrix",coverage:"Coverage Gaps",warnings:"Warnings",starts:"Starts"};
-function syncTabMenu(){ const c=$("tabMenuCur"); if(c) c.textContent=TAB_LABELS[state.view]||"Menu"; const w=$("tabsWrap"); if(w) w.classList.remove("open"); }
+function openSidebar(){ const s=$("sidebar"); if(s) s.classList.add("open"); const sc=$("navScrim"); if(sc) sc.classList.remove("hidden"); }
+function closeSidebar(){ const s=$("sidebar"); if(s) s.classList.remove("open"); const sc=$("navScrim"); if(sc) sc.classList.add("hidden"); }
+function syncTabMenu(){ document.querySelectorAll(".side-tab").forEach(t=>t.classList.toggle("active",t.dataset.view===state.view)); closeSidebar(); }
 const toolbar = inner => `<div class="toolbar">${inner}</div>`;
 function mselVisOpts(p){ return [...p.querySelectorAll(".msel-opt")].filter(o=>o.style.display!=="none").map(o=>o.querySelector("input")); }
 function wireMsel(btn,panel,all,none,search,other,onChange){ const p=$(panel); if(!p) return;
