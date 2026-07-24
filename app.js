@@ -180,7 +180,47 @@ async function loadDivision(key){
   } catch(e){ $("viewArea").innerHTML=`<div class="empty">Could not load ${esc(key)}: ${esc(e.message)}</div>`; }
 }
 
-function renderAll(){ renderBanner(); renderKPIs(); renderView(); }
+function renderAll(){ renderBanner(); renderKPIs(); updateWarnBadge(); renderView(); }
+/* Warnings: a community with >1 supplier for the same trade scope */
+function computeWarnings(d){
+  const byComm={};
+  (d.vendors||[]).forEach(v=>{ if(!v.category) return; (v.assigned||[]).forEach(c=>{
+    (byComm[c]=byComm[c]||{}); (byComm[c][v.category]=byComm[c][v.category]||[]).push(v); }); });
+  const warns=[];
+  Object.keys(byComm).forEach(c=>Object.keys(byComm[c]).forEach(cat=>{
+    const uniq=[...new Map(byComm[c][cat].map(v=>[v.name,v])).values()];
+    if(uniq.length>1) warns.push({community:c,category:cat,vendors:uniq}); }));
+  warns.sort((a,b)=>a.community.localeCompare(b.community)||a.category.localeCompare(b.category));
+  return warns;
+}
+function updateWarnBadge(){ const b=$("warnBadge"); if(!b||!state.data) return;
+  const n=computeWarnings(state.data).length;
+  b.textContent=n; b.classList.toggle("hidden",n===0); }
+function viewWarnings(){
+  const d=state.data; const warns=computeWarnings(d);
+  const byC={}; warns.forEach(w=>{ (byC[w.community]=byC[w.community]||[]).push(w); });
+  const comms=Object.keys(byC).sort((a,b)=>a.localeCompare(b));
+  $("viewArea").innerHTML=`
+    <div class="kpis" style="margin-bottom:16px">
+      <div class="kpi ${warns.length?'warn':''}"><div class="n">${fmt(warns.length)}</div><div class="l">Duplicate-scope assignments</div></div>
+      <div class="kpi"><div class="n">${fmt(comms.length)}</div><div class="l">Communities affected</div></div>
+    </div>
+    ${toolbar(`<button class="btn mini ghost" id="wExport">Export CSV</button><span class="count">${warns.length} warning${warns.length===1?'':'s'}</span>`)}
+    <div id="wBody">${ comms.length? comms.map((c,i)=>`
+      <div class="acc">
+        <button class="acc-head" data-i="${i}">
+          <span class="acc-title">${esc(commLabel(c))}</span>
+          <span class="acc-count has-gaps">${byC[c].length} duplicate${byC[c].length===1?'':'s'}</span>
+        </button>
+        <div class="acc-body hidden" id="wacc-${i}">
+          ${byC[c].map(w=>`<div class="chg-sec"><div class="chg-sec-h">${esc(w.category)} — ${w.vendors.length} suppliers</div>${w.vendors.map(v=>`<span class="chip warn-chip">${esc(v.name)}${v.supplierCode?" #"+esc(v.supplierCode):""}</span>`).join("")}</div>`).join("")}
+        </div>
+      </div>`).join("") : `<div class="empty">No warnings — every trade scope has at most one supplier per community.</div>` }</div>`;
+  $("wBody").querySelectorAll(".acc-head").forEach(b=>b.addEventListener("click",()=>{ $("wacc-"+b.dataset.i).classList.toggle("hidden"); b.classList.toggle("open"); }));
+  window._exp=()=>exportCSV(`${d.key}_scope_warnings`,["Community","Trade scope","Suppliers"],
+    warns.map(w=>[commLabel(w.community),w.category,w.vendors.map(v=>v.name+(v.supplierCode?" #"+v.supplierCode:"")).join("; ")]));
+  $("wExport").addEventListener("click",()=>window._exp());
+}
 
 /* ---------------- DERIVED: starts within range ---------------- */
 function monthsInRange(){
@@ -321,7 +361,7 @@ function renderKPIs(){
 /* ---------------- VIEWS ---------------- */
 function renderView(){
   ({community:viewByCommunity,vendor:viewByVendor,matrix:viewMatrix,
-    coverage:viewCoverage,starts:viewStarts,history:viewHistory}[state.view]||viewByCommunity)();
+    coverage:viewCoverage,warnings:viewWarnings,starts:viewStarts,history:viewHistory}[state.view]||viewByCommunity)();
 }
 const toolbar = inner => `<div class="toolbar">${inner}</div>`;
 function mselVisOpts(p){ return [...p.querySelectorAll(".msel-opt")].filter(o=>o.style.display!=="none").map(o=>o.querySelector("input")); }

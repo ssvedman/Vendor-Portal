@@ -56,6 +56,7 @@ main{max-width:var(--maxw);margin:0 auto;padding:22px 24px 60px}
 /* ---------- Tabs ---------- */
 .tabs{display:flex;gap:4px;border-bottom:2px solid var(--line);margin-bottom:18px;flex-wrap:wrap}
 .tab{padding:11px 18px;border:none;background:none;font-size:14.5px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px}
+.tab-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;margin-left:6px;border-radius:9px;background:#d64545;color:#fff;font-size:11px;font-weight:700;line-height:1;vertical-align:middle}
 .tab.active{color:var(--blue);border-bottom-color:var(--blue)}
 .tab:hover{color:var(--navy)}
 
@@ -177,8 +178,24 @@ canvas{max-width:100%}
   .toolbar input[type=text],.toolbar select{max-width:100%;flex:1 1 100%}
   .count{margin-left:0}
   .tabs{overflow-x:auto;flex-wrap:nowrap}
-  .tab{white-space:nowrap}
+  .tab{white-space:nowrap;padding:10px 12px}
   .user-chip{font-size:12px}
+  .topbar-in{gap:8px;padding:8px 12px}
+  .subbar{gap:8px}
+  /* Full matrix: shrink the sticky Trade Partner column so more data columns show */
+  .matrix{font-size:12px}
+  .matrix th,.matrix td{padding:6px 8px}
+  .matrix td.sticky,.matrix th.sticky{max-width:150px;white-space:normal;word-break:break-word}
+}
+@media (max-width:560px){
+  .topbar .title{display:none}
+  .user-chip{display:none}
+  main{padding:12px 10px 36px}
+  .range-ctrl{gap:6px}
+  .range-ctrl label{font-size:11px}
+  .range-ctrl input[type=date]{padding:5px 6px;font-size:12px}
+  .matrix td.sticky,.matrix th.sticky{max-width:118px}
+  .matrix .starts-chip{display:none}
 }
 @media (max-width:480px){ .kpis{grid-template-columns:1fr 1fr} .auth-card{padding:28px 22px} }
 
