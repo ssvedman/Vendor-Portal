@@ -42,6 +42,7 @@ header.topbar{background:#fff;border-bottom:1px solid var(--line);position:stick
 .topbar .title{font-weight:700;color:var(--navy);font-size:16px}
 .topbar select{padding:8px 12px;border:1.5px solid var(--line);border-radius:9px;font-size:14px;font-weight:600;color:var(--navy);background:#fff}
 .spacer{flex:1}
+.topbar-actions{display:flex;align-items:center;gap:8px}
 .user-chip{font-size:13px;color:var(--muted)}
 .linkbtn{background:none;border:none;color:var(--blue);font-weight:600;font-size:13.5px;padding:6px 8px;border-radius:7px}
 .linkbtn:hover{background:var(--blue-050)}
@@ -57,6 +58,8 @@ main{max-width:var(--maxw);margin:0 auto;padding:22px 24px 60px}
 .tabs{display:flex;gap:4px;border-bottom:2px solid var(--line);margin-bottom:18px;flex-wrap:wrap}
 .tab{padding:11px 18px;border:none;background:none;font-size:14.5px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px}
 .tab-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;margin-left:6px;border-radius:9px;background:#d64545;color:#fff;font-size:11px;font-weight:700;line-height:1;vertical-align:middle}
+.tabmenu-btn{display:none;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:11px 14px;border:1.5px solid var(--line);border-radius:10px;background:var(--card);color:var(--navy);font-weight:700;font-size:14.5px;margin-bottom:14px;cursor:pointer}
+.tabmenu-ic{font-size:16px;color:var(--muted)}
 .tab.active{color:var(--blue);border-bottom-color:var(--blue)}
 .tab:hover{color:var(--navy)}
 
@@ -152,7 +155,7 @@ canvas{max-width:100%}
 
 /* ---------- print / PDF ---------- */
 @media print{
-  header.topbar,.tabs,.toolbar,.range-ctrl,#adminLink,#dashLink,#logoutBtn,#printBtn,.gs-wrap,#globalSearch{display:none!important}
+  header.topbar,.tabs,.tabmenu-btn,.toolbar,.range-ctrl,#adminLink,#dashLink,#logoutBtn,#printBtn,.gs-wrap,#globalSearch{display:none!important}
   #auth{display:none!important}
   body{background:#fff}
   main{max-width:100%;padding:0}
@@ -186,8 +189,11 @@ canvas{max-width:100%}
   .matrix{font-size:12px}
   .matrix th,.matrix td{padding:6px 8px}
   .matrix td.sticky,.matrix th.sticky{max-width:150px;white-space:normal;word-break:break-word}
+  /* tidy topbar: action buttons drop to their own right-aligned row */
+  .spacer{display:none}
+  .topbar-actions{order:20;flex:1 1 100%;justify-content:flex-end;flex-wrap:wrap;gap:6px}
 }
-@media (max-width:560px){
+@media (max-width:640px){
   .topbar .title{display:none}
   .user-chip{display:none}
   main{padding:12px 10px 36px}
@@ -196,6 +202,17 @@ canvas{max-width:100%}
   .range-ctrl input[type=date]{padding:5px 6px;font-size:12px}
   .matrix td.sticky,.matrix th.sticky{max-width:118px}
   .matrix .starts-chip{display:none}
+  /* compact summary tiles */
+  .kpis{grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+  .kpi{padding:10px 12px}
+  .kpi .n{font-size:20px}
+  .kpi .l{font-size:10.5px;letter-spacing:.02em}
+  /* tabs collapse into a hamburger dropdown */
+  .tabmenu-btn{display:flex}
+  .tabs{display:none;flex-direction:column;overflow:visible;border-bottom:none;margin:-4px 0 14px;padding:6px;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow)}
+  .tabs.open{display:flex}
+  .tabs .tab{width:100%;text-align:left;padding:11px 12px;border-bottom:none;margin:0;border-radius:8px}
+  .tabs .tab.active{background:var(--blue-050);color:var(--navy)}
 }
 @media (max-width:480px){ .kpis{grid-template-columns:1fr 1fr} .auth-card{padding:28px 22px} }
 

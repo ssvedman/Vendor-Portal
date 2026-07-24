@@ -142,8 +142,11 @@ async function enterApp(email){
   // tabs
   document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
     document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
-    t.classList.add("active"); state.view=t.dataset.view; savePrefs(); renderView(); }));
+    t.classList.add("active"); state.view=t.dataset.view; savePrefs(); syncTabMenu(); renderView(); }));
   document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.view===state.view));
+  $("tabMenuBtn").addEventListener("click",e=>{ e.stopPropagation(); $("tabsWrap").classList.toggle("open"); });
+  document.addEventListener("click",e=>{ const w=$("tabsWrap"),b=$("tabMenuBtn"); if(w&&b&&!w.contains(e.target)&&!b.contains(e.target)) w.classList.remove("open"); });
+  syncTabMenu();
 
   $("logoutBtn").addEventListener("click",logout);
   $("adminLink").addEventListener("click",showAdmin);
@@ -365,6 +368,8 @@ function renderView(){
   ({community:viewByCommunity,vendor:viewByVendor,matrix:viewMatrix,
     coverage:viewCoverage,warnings:viewWarnings,starts:viewStarts,history:viewHistory}[state.view]||viewByCommunity)();
 }
+const TAB_LABELS={community:"By Community",vendor:"By Vendor",matrix:"Full Matrix",coverage:"Coverage Gaps",warnings:"Warnings",starts:"Starts"};
+function syncTabMenu(){ const c=$("tabMenuCur"); if(c) c.textContent=TAB_LABELS[state.view]||"Menu"; const w=$("tabsWrap"); if(w) w.classList.remove("open"); }
 const toolbar = inner => `<div class="toolbar">${inner}</div>`;
 function mselVisOpts(p){ return [...p.querySelectorAll(".msel-opt")].filter(o=>o.style.display!=="none").map(o=>o.querySelector("input")); }
 function wireMsel(btn,panel,all,none,search,other,onChange){ const p=$(panel); if(!p) return;
@@ -783,7 +788,7 @@ function setupGlobalSearch(){
   box.addEventListener("focus",run);
   document.addEventListener("click",e=>{ if(!panel.contains(e.target)&&e.target!==box) panel.classList.add("hidden"); });
 }
-function activateTab(view){ document.querySelectorAll(".tab").forEach(t=>{t.classList.toggle("active",t.dataset.view===view);}); state.view=view; }
+function activateTab(view){ document.querySelectorAll(".tab").forEach(t=>{t.classList.toggle("active",t.dataset.view===view);}); state.view=view; syncTabMenu(); }
 function jumpTo(type,val){
   showDashboard();
   if(type==="community"){ activateTab("community"); renderView(); const s=$("commPick"); if(s){s.value=val; s.dispatchEvent(new Event("change"));} }
