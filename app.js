@@ -840,11 +840,13 @@ function renderPerms(){
         <button class="btn mini" id="permSave">Save user</button>
       </div>
       <div id="permMsg" class="msg"></div>
+      <input type="text" id="permSearch" class="permsearch" placeholder="Search users by email or role…">
       <div class="table-wrap" id="permList"></div>
     </div></div>`;
   const toggleDivs=()=>{ $("permDivs").style.display = $("permRole").value==="editor" ? "inline-flex":"none"; };
   $("permRole").addEventListener("change",toggleDivs); toggleDivs();
   $("permSave").addEventListener("click",savePerm);
+  $("permSearch").addEventListener("input",renderPermList);
   loadPermList();
 }
 function permMsg(t,k){ const m=$("permMsg"); if(m){ m.className="msg "+(k||"info"); m.textContent=t; } }
@@ -896,20 +898,31 @@ function permTable(rows){
       <td class="num">${DEMO?"":`<button class="linkbtn permEdit" data-email="${esc(r.email)}" data-role="${esc(r.role)}" data-divisions="${esc((r.divisions||[]).join(','))}">Edit</button> <button class="linkbtn permDel" data-email="${esc(r.email)}">Remove</button>`}</td></tr>`).join("")
   }</tbody></table>`;
 }
+let permRowsCache=[];
 async function loadPermList(){
   const list=$("permList"); if(!list) return;
   if(DEMO){
-    const rows=Object.entries(CFG.ROLES).map(([email,r])=>({email,role:r.role,divisions:r.divisions||[]}));
-    list.innerHTML=permTable(rows)+`<p class="tiny">Demo mode: this list comes from config.js and is read-only. Connect Supabase to manage users here.</p>`;
+    permRowsCache=Object.entries(CFG.ROLES).map(([email,r])=>({email,role:r.role,divisions:r.divisions||[]}));
+    renderPermList();
+    list.insertAdjacentHTML("beforeend",`<p class="tiny">Demo mode: this list comes from config.js and is read-only. Connect Supabase to manage users here.</p>`);
     return;
   }
   try{
     const {data,error}=await sb.from("app_roles").select("email,role,divisions").order("email");
     if(error) throw error;
-    list.innerHTML=permTable(data);
-    list.querySelectorAll(".permEdit").forEach(b=>b.addEventListener("click",()=>fillPermForm(b.dataset)));
-    list.querySelectorAll(".permDel").forEach(b=>b.addEventListener("click",()=>delPerm(b.dataset.email)));
+    permRowsCache=data||[];
+    renderPermList();
   }catch(e){ list.innerHTML=`<div class="empty">Could not load users: ${esc(e.message)}</div>`; }
+}
+function renderPermList(){
+  const list=$("permList"); if(!list) return;
+  const q=(($("permSearch")||{}).value||"").trim().toLowerCase();
+  const rows=q ? permRowsCache.filter(r=>((r.email||"")+" "+(r.role||"")).toLowerCase().includes(q)) : permRowsCache;
+  if(q && !rows.length){ list.innerHTML=`<div class="empty">No users match “${esc(q)}”.</div>`; return; }
+  list.innerHTML=permTable(rows);
+  if(DEMO) return;
+  list.querySelectorAll(".permEdit").forEach(b=>b.addEventListener("click",()=>fillPermForm(b.dataset)));
+  list.querySelectorAll(".permDel").forEach(b=>b.addEventListener("click",()=>delPerm(b.dataset.email)));
 }
 function fillPermForm(ds){
   $("permEmail").value=ds.email; $("permRole").value=ds.role;

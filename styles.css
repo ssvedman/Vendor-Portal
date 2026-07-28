@@ -301,6 +301,7 @@ tbody tr.totalrow:hover td{background:#eef4fb}
 .permform input[type=email]{max-width:240px}
 .linkrow{display:flex;align-items:center;gap:8px}
 .linkrow input{flex:1;min-width:0;font-size:13px}
+.permsearch{width:100%;font-size:13px;margin:0 0 10px}
 .permform select{padding:9px 12px;border:1.5px solid var(--line);border-radius:9px;font-size:14px;background:#fff}
 .permdivs{display:inline-flex;gap:12px;flex-wrap:wrap;align-items:center}
 .permchk{font-size:13px;color:var(--navy);font-weight:600;display:inline-flex;align-items:center;gap:5px}
