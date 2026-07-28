@@ -895,7 +895,7 @@ function permTable(rows){
   return `<table><thead><tr><th>Email</th><th>Role</th><th>Divisions</th><th></th></tr></thead><tbody>${
     rows.map(r=>`<tr><td>${esc(r.email)}</td><td><span class="role-tag">${esc(r.role)}</span></td>
       <td>${(r.divisions&&r.divisions.length)? r.divisions.map(k=>`<span class="chip">${esc(dl(k))}</span>`).join("") : (r.role==="admin"?'<span class="cat-tag">all</span>':'—')}</td>
-      <td class="num">${DEMO?"":`<button class="linkbtn permEdit" data-email="${esc(r.email)}" data-role="${esc(r.role)}" data-divisions="${esc((r.divisions||[]).join(','))}">Edit</button> <button class="linkbtn permDel" data-email="${esc(r.email)}">Remove</button> <button class="linkbtn permInvite" data-email="${esc(r.email)}">Invite</button>`}</td></tr>`).join("")
+      <td class="num">${DEMO?"":`<button class="linkbtn permEdit" data-email="${esc(r.email)}" data-role="${esc(r.role)}" data-divisions="${esc((r.divisions||[]).join(','))}">Edit</button> <button class="linkbtn permInvite" data-email="${esc(r.email)}">Invite</button> <button class="linkbtn danger permDel" data-email="${esc(r.email)}">Remove</button>`}</td></tr>`).join("")
   }</tbody></table>`;
 }
 let permRowsCache=[];
@@ -908,11 +908,18 @@ async function loadPermList(){
     return;
   }
   try{
-    const {data,error}=await sb.from("app_roles").select("email,role,divisions").order("email");
+    const {data,error}=await sb.rpc("admin_list_users");
     if(error) throw error;
-    permRowsCache=data||[];
+    permRowsCache=(data||[]).map(u=>({email:u.email,role:u.role,divisions:u.divisions||[]}));
     renderPermList();
-  }catch(e){ list.innerHTML=`<div class="empty">Could not load users: ${esc(e.message)}</div>`; }
+  }catch(e){
+    // Fallback to the explicit-roles table if admin_list_users() isn't installed yet
+    try{
+      const {data,error}=await sb.from("app_roles").select("email,role,divisions").order("email");
+      if(error) throw error;
+      permRowsCache=data||[]; renderPermList();
+    }catch(e2){ list.innerHTML=`<div class="empty">Could not load users: ${esc(e2.message)}</div>`; }
+  }
 }
 function renderPermList(){
   const list=$("permList"); if(!list) return;
@@ -926,7 +933,7 @@ function renderPermList(){
   list.innerHTML=permTable(rows);
   if(DEMO) return;
   list.querySelectorAll(".permEdit").forEach(b=>b.addEventListener("click",()=>fillPermForm(b.dataset)));
-  list.querySelectorAll(".permDel").forEach(b=>b.addEventListener("click",()=>delPerm(b.dataset.email)));
+  list.querySelectorAll(".permDel").forEach(b=>b.addEventListener("click",()=>deleteUser(b.dataset.email)));
   list.querySelectorAll(".permInvite").forEach(b=>b.addEventListener("click",()=>invitePerm(b.dataset.email)));
 }
 function invitePerm(email){
@@ -960,6 +967,17 @@ async function delPerm(email){
   try{
     const {error}=await sb.from("app_roles").delete().eq("email",email); if(error) throw error;
     permMsg(`Removed ${email} — now a default viewer.`,"ok"); loadPermList();
+  }catch(e){ permMsg("Remove failed: "+e.message,"err"); }
+}
+async function deleteUser(email){
+  if(email===state.email) return permMsg("You can't remove your own account.","err");
+  if(DEMO) return permMsg("Demo mode: connect Supabase to manage users.","info");
+  if(!confirm(`Delete the login for ${email}?\n\nThis removes their access to all sites on this account and can't be undone.`)) return;
+  try{
+    const {data,error}=await sb.rpc("admin_delete_user",{target_email:email});
+    if(error) throw error;
+    if(!data || !data.ok) throw new Error((data&&data.error)||"Remove failed.");
+    permMsg(`Removed ${email} — their login has been deleted.`,"ok"); loadPermList();
   }catch(e){ permMsg("Remove failed: "+e.message,"err"); }
 }
 function showDashboard(){ $("admin").classList.add("hidden"); $("dashboard").classList.remove("hidden");
