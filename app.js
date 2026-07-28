@@ -852,9 +852,9 @@ function renderResetLinks(){
   const p=$("resetPanel"); if(!p) return;
   if(!isAdmin()){ p.classList.add("hidden"); return; }
   p.classList.remove("hidden");
-  p.innerHTML=`<div class="panel"><div class="panel-h">Password reset links</div>
+  p.innerHTML=`<div class="panel"><div class="panel-h">Add user / reset password</div>
     <div style="padding:16px">
-      <p class="tiny" style="margin:0 0 12px">Generate a one-time link (valid 24 hours) that lets a user set their own password. Copy it and send it to them directly — no email is sent.</p>
+      <p class="tiny" style="margin:0 0 12px">Enter any ${esc(CFG.ALLOWED_DOMAIN)} email. If it's a new person, the account is created automatically. Either way you get a one-time link (valid 24 hours) for them to set their own password — copy it and send it directly. No email is sent.</p>
       <div class="permform">
         <input type="email" id="resetEmail" placeholder="user@lennar.com">
         <button class="btn mini" id="resetGen">Generate link</button>
@@ -878,11 +878,12 @@ async function genResetLink(){
   if(DEMO) return resetMsg("Reset links are disabled in demo mode.","err");
   $("resetGen").disabled=true; $("resetGen").textContent="Generating…";
   try{
-    const {data,error}=await sb.rpc("admin_create_reset_token",{target_email:email});
+    const {data,error}=await sb.rpc("admin_add_or_reset",{target_email:email});
     if(error) throw error;
-    const url=location.origin+location.pathname+"#recover="+encodeURIComponent(data);
+    const token=data&&data.token; if(!token) throw new Error("No link was returned.");
+    const url=location.origin+location.pathname+"#recover="+encodeURIComponent(token);
     $("resetLink").value=url; $("resetOut").classList.remove("hidden");
-    resetMsg("Link generated — copy it and send it to "+email+". It expires in 24 hours.","ok");
+    resetMsg((data.created?"New account created for ":"Reset link ready for ")+email+" — copy the link and send it. It expires in 24 hours.","ok");
   }catch(e){ resetMsg(prettyErr(e,"Could not generate a link."),"err"); }
   finally{ $("resetGen").disabled=false; $("resetGen").textContent="Generate link"; }
 }
