@@ -22,6 +22,13 @@
       <input type="password" id="password" placeholder="Your password" autocomplete="current-password">
       <button class="btn" id="signinBtn" style="margin-top:14px">Sign in</button>
     </div>
+    <div id="stepRecover" class="hidden">
+      <label class="fld" for="newPass">New password</label>
+      <input type="password" id="newPass" placeholder="At least 8 characters" autocomplete="new-password">
+      <label class="fld" for="newPass2" style="margin-top:12px">Confirm password</label>
+      <input type="password" id="newPass2" placeholder="Re-enter password" autocomplete="new-password">
+      <button class="btn" id="setPassBtn" style="margin-top:14px">Set password</button>
+    </div>
     <div id="authMsg" class="msg"></div>
     <p class="tiny">Access limited to Lennar associates. Need access or a password reset? Contact the portal admin.</p>
   </div>
@@ -106,6 +113,7 @@
         </div>
         <div class="admin-side">
           <div id="permsPanel" class="hidden"></div>
+          <div id="resetPanel" class="hidden"></div>
           <div id="rollbackWrap"></div>
           <div class="panel"><div class="panel-h">Change history</div>
             <div style="padding:14px"><button class="btn mini ghost" id="historyBtn">View full change history →</button></div></div>

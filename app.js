@@ -78,11 +78,41 @@ async function checkExistingSession(){
   if (data&&data.session&&data.session.user) enterApp(data.session.user.email);
   sb.auth.onAuthStateChange((_e, session)=>{ if (session&&session.user) enterApp(session.user.email); });
 }
+// ---- password reset (admin-generated link) ----
+function getRecoverToken(){ const m=(location.hash||"").match(/[#&]recover=([^&]+)/); return m?decodeURIComponent(m[1]):null; }
+function initRecovery(){
+  const tok=getRecoverToken(); if(!tok) return false;
+  window._recovering=true;
+  $("app").classList.add("hidden"); $("auth").classList.remove("hidden");
+  const sub=document.querySelector(".auth-sub"); if(sub) sub.textContent="Set a new password for your account.";
+  $("stepSignin").classList.add("hidden"); $("stepRecover").classList.remove("hidden");
+  $("setPassBtn").addEventListener("click",()=>redeemReset(tok));
+  $("newPass2").addEventListener("keydown",e=>{ if(e.key==="Enter") redeemReset(tok); });
+  return true;
+}
+async function redeemReset(tok){
+  const p1=$("newPass").value, p2=$("newPass2").value; clearAuth();
+  if(!p1 || p1.length<8) return authMsg("Password must be at least 8 characters.","err");
+  if(p1!==p2) return authMsg("Passwords don't match.","err");
+  if(DEMO) return authMsg("Password reset is disabled in demo mode.","err");
+  $("setPassBtn").disabled=true; $("setPassBtn").textContent="Saving…";
+  try{
+    const {data,error}=await sb.rpc("redeem_reset_token",{p_token:tok,p_new_password:p1});
+    if(error) throw error;
+    if(!data || !data.ok) throw new Error((data&&data.error)||"Could not set your password.");
+    $("stepRecover").classList.add("hidden");
+    const sub=document.querySelector(".auth-sub"); if(sub) sub.textContent="Your password has been set. You can now sign in.";
+    authMsg("Password updated — taking you to sign in…","ok");
+    setTimeout(()=>{ location.hash=""; location.reload(); },1600);
+  }catch(e){ authMsg((e&&e.message)||"Could not set your password.","err"); }
+  finally{ $("setPassBtn").disabled=false; $("setPassBtn").textContent="Set password"; }
+}
 async function logout(){ if(!DEMO&&sb) await sb.auth.signOut(); location.reload(); }
 
 /* ---------------- APP INIT ---------------- */
 let entered=false;
 async function enterApp(email){
+  if (window._recovering) return;
   if (entered) return; entered=true;
   state.email=email.toLowerCase();
   const r=resolveRole(state.email); state.role=r.role; state.roleDivs=r.divisions;
@@ -792,7 +822,7 @@ function exportCSV(name,headers,rows){
 function showAdmin(){ if(!canUploadAny()) return;
   $("dashboard").classList.add("hidden"); $("admin").classList.remove("hidden");
   $("adminLink").classList.add("hidden"); $("dashLink").classList.remove("hidden");
-  renderPerms(); renderRollback($("adminDiv").value); }
+  renderPerms(); renderResetLinks(); renderRollback($("adminDiv").value); }
 
 /* ---------------- Access & permissions (admin only) ---------------- */
 function renderPerms(){
@@ -818,6 +848,44 @@ function renderPerms(){
   loadPermList();
 }
 function permMsg(t,k){ const m=$("permMsg"); if(m){ m.className="msg "+(k||"info"); m.textContent=t; } }
+function renderResetLinks(){
+  const p=$("resetPanel"); if(!p) return;
+  if(!isAdmin()){ p.classList.add("hidden"); return; }
+  p.classList.remove("hidden");
+  p.innerHTML=`<div class="panel"><div class="panel-h">Password reset links</div>
+    <div style="padding:16px">
+      <p class="tiny" style="margin:0 0 12px">Generate a one-time link (valid 24 hours) that lets a user set their own password. Copy it and send it to them directly — no email is sent.</p>
+      <div class="permform">
+        <input type="email" id="resetEmail" placeholder="user@lennar.com">
+        <button class="btn mini" id="resetGen">Generate link</button>
+      </div>
+      <div id="resetMsg" class="msg"></div>
+      <div id="resetOut" class="hidden" style="margin-top:10px">
+        <div class="linkrow"><input type="text" id="resetLink" readonly><button class="btn mini ghost" id="resetCopy">Copy</button></div>
+      </div>
+    </div></div>`;
+  $("resetGen").addEventListener("click",genResetLink);
+  $("resetEmail").addEventListener("keydown",e=>{ if(e.key==="Enter") genResetLink(); });
+  $("resetCopy").addEventListener("click",()=>{ const i=$("resetLink"); i.select(); i.setSelectionRange(0,99999);
+    if(navigator.clipboard) navigator.clipboard.writeText(i.value); else document.execCommand("copy");
+    const b=$("resetCopy"); b.textContent="Copied"; setTimeout(()=>b.textContent="Copy",1500); });
+}
+function resetMsg(t,k){ const m=$("resetMsg"); if(m){ m.className="msg "+(k||"info"); m.textContent=t; } }
+async function genResetLink(){
+  const email=$("resetEmail").value.trim().toLowerCase(); resetMsg("");
+  $("resetOut").classList.add("hidden");
+  if(!email || !email.endsWith(CFG.ALLOWED_DOMAIN)) return resetMsg("Enter a valid "+CFG.ALLOWED_DOMAIN+" email.","err");
+  if(DEMO) return resetMsg("Reset links are disabled in demo mode.","err");
+  $("resetGen").disabled=true; $("resetGen").textContent="Generating…";
+  try{
+    const {data,error}=await sb.rpc("admin_create_reset_token",{target_email:email});
+    if(error) throw error;
+    const url=location.origin+location.pathname+"#recover="+encodeURIComponent(data);
+    $("resetLink").value=url; $("resetOut").classList.remove("hidden");
+    resetMsg("Link generated — copy it and send it to "+email+". It expires in 24 hours.","ok");
+  }catch(e){ resetMsg(prettyErr(e,"Could not generate a link."),"err"); }
+  finally{ $("resetGen").disabled=false; $("resetGen").textContent="Generate link"; }
+}
 function permTable(rows){
   if(!rows.length) return `<div class="empty">No explicit roles yet — everyone at ${esc(CFG.ALLOWED_DOMAIN)} is a viewer.</div>`;
   const dl=k=>(CFG.DIVISIONS.find(d=>d.key===k)||{}).label||k;
@@ -1129,5 +1197,5 @@ async function loadDivisionsFromDB(){
     if(data&&data.length){ CFG.DIVISIONS.length=0; data.forEach(d=>CFG.DIVISIONS.push({key:d.key,label:d.label,code:d.code})); } }catch(e){}
 }
 
-checkExistingSession();
+if(!initRecovery()) checkExistingSession();
 /* v: permissions editor */
