@@ -840,7 +840,7 @@ function renderPerms(){
         <button class="btn mini" id="permSave">Save user</button>
       </div>
       <div id="permMsg" class="msg"></div>
-      <input type="text" id="permSearch" class="permsearch" placeholder="Search users by email or role…">
+      <input type="text" id="permSearch" class="permsearch" placeholder="Search users by email, role, or division…">
       <div class="table-wrap" id="permList"></div>
     </div></div>`;
   const toggleDivs=()=>{ $("permDivs").style.display = $("permRole").value==="editor" ? "inline-flex":"none"; };
@@ -917,7 +917,11 @@ async function loadPermList(){
 function renderPermList(){
   const list=$("permList"); if(!list) return;
   const q=(($("permSearch")||{}).value||"").trim().toLowerCase();
-  const rows=q ? permRowsCache.filter(r=>((r.email||"")+" "+(r.role||"")).toLowerCase().includes(q)) : permRowsCache;
+  const dlbl=k=>((CFG.DIVISIONS.find(d=>d.key===k)||{}).label||k);
+  const rows=q ? permRowsCache.filter(r=>{
+    const hay=[r.email||"", r.role||"", ...((r.divisions||[]).flatMap(k=>[k,dlbl(k)]))].join(" ").toLowerCase();
+    return hay.includes(q);
+  }) : permRowsCache;
   if(q && !rows.length){ list.innerHTML=`<div class="empty">No users match “${esc(q)}”.</div>`; return; }
   list.innerHTML=permTable(rows);
   if(DEMO) return;
