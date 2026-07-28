@@ -895,7 +895,7 @@ function permTable(rows){
   return `<table><thead><tr><th>Email</th><th>Role</th><th>Divisions</th><th></th></tr></thead><tbody>${
     rows.map(r=>`<tr><td>${esc(r.email)}</td><td><span class="role-tag">${esc(r.role)}</span></td>
       <td>${(r.divisions&&r.divisions.length)? r.divisions.map(k=>`<span class="chip">${esc(dl(k))}</span>`).join("") : (r.role==="admin"?'<span class="cat-tag">all</span>':'—')}</td>
-      <td class="num">${DEMO?"":`<button class="linkbtn permEdit" data-email="${esc(r.email)}" data-role="${esc(r.role)}" data-divisions="${esc((r.divisions||[]).join(','))}">Edit</button> <button class="linkbtn permDel" data-email="${esc(r.email)}">Remove</button>`}</td></tr>`).join("")
+      <td class="num">${DEMO?"":`<button class="linkbtn permEdit" data-email="${esc(r.email)}" data-role="${esc(r.role)}" data-divisions="${esc((r.divisions||[]).join(','))}">Edit</button> <button class="linkbtn permDel" data-email="${esc(r.email)}">Remove</button> <button class="linkbtn permInvite" data-email="${esc(r.email)}">Invite</button>`}</td></tr>`).join("")
   }</tbody></table>`;
 }
 let permRowsCache=[];
@@ -923,6 +923,12 @@ function renderPermList(){
   if(DEMO) return;
   list.querySelectorAll(".permEdit").forEach(b=>b.addEventListener("click",()=>fillPermForm(b.dataset)));
   list.querySelectorAll(".permDel").forEach(b=>b.addEventListener("click",()=>delPerm(b.dataset.email)));
+  list.querySelectorAll(".permInvite").forEach(b=>b.addEventListener("click",()=>invitePerm(b.dataset.email)));
+}
+function invitePerm(email){
+  const inp=$("resetEmail"); if(inp) inp.value=email;
+  const panel=$("resetPanel"); if(panel) panel.scrollIntoView({behavior:"smooth",block:"start"});
+  genResetLink();
 }
 function fillPermForm(ds){
   $("permEmail").value=ds.email; $("permRole").value=ds.role;
