@@ -386,6 +386,7 @@ function closeSidebar(){ const s=$("sidebar"); if(s) s.classList.remove("open");
 function syncTabMenu(){ document.querySelectorAll(".side-tab").forEach(t=>t.classList.toggle("active",t.dataset.view===state.view)); closeSidebar(); }
 const toolbar = inner => `<div class="toolbar">${inner}</div>`;
 function mselVisOpts(p){ return [...p.querySelectorAll(".msel-opt")].filter(o=>o.style.display!=="none").map(o=>o.querySelector("input")); }
+function mselChecked(p){ return new Set([...p.querySelectorAll(".msel-opt input[type=checkbox]")].filter(b=>b.checked).map(b=>b.value)); }
 function wireMsel(btn,panel,all,none,search,other,onChange){ const p=$(panel); if(!p) return;
   const searchEl=$(search);
   // Excel-style controls: a single "(Select all)" toggle replaces Select all / Unselect all;
@@ -407,20 +408,25 @@ function wireMsel(btn,panel,all,none,search,other,onChange){ const p=$(panel); i
     addRow=document.createElement("div"); addRow.className="msel-addrow hidden";
     const a=document.createElement("button"); a.type="button"; a.className="linkbtn msel-add";
     const paint=()=>{ const on=p.dataset.add==="1"; a.innerHTML=(on?"&#9745;":"&#9744;")+" Add current selection to filter"; a.classList.toggle("on",on); };
-    paint(); a.addEventListener("click",()=>{ p.dataset.add=(p.dataset.add==="1")?"0":"1"; paint(); });
+    paint(); a.addEventListener("click",()=>{ p.dataset.add=(p.dataset.add==="1")?"0":"1"; if(p.dataset.add==="1") p._addBase=mselChecked(p); paint(); });
     addRow.appendChild(a); searchEl.after(addRow);
   }
   $(btn).addEventListener("click",e=>{ e.stopPropagation(); document.querySelectorAll(".msel-panel:not(.hidden)").forEach(o=>{ if(o!==p) o.classList.add("hidden"); }); p.classList.toggle("hidden"); });
   const allB=$(all); if(allB) allB.addEventListener("click",()=>{ mselVisOpts(p).forEach(b=>b.checked=true); onChange(); syncMaster(); });
   const noneB=$(none); if(noneB) noneB.addEventListener("click",()=>{ mselVisOpts(p).forEach(b=>b.checked=false); onChange(); syncMaster(); });
   p.addEventListener("change",()=>{ onChange(); syncMaster(); });
-  if(searchEl) searchEl.addEventListener("input",()=>{
-    const qq=searchEl.value.trim().toLowerCase(), addMode=p.dataset.add==="1";
-    p.querySelectorAll(".msel-opt").forEach(o=>{ const m=(!qq||o.textContent.toLowerCase().includes(qq)); o.style.display=m?"":"none";
-      const cb=o.querySelector("input"); if(qq && cb){ if(m) cb.checked=true; else if(!addMode) cb.checked=false; } });
-    if(addRow) addRow.classList.toggle("hidden", !qq);
-    onChange(); syncMaster();
-  });
+  if(searchEl){
+    searchEl.addEventListener("input",()=>{
+      const qq=searchEl.value.trim().toLowerCase(), addMode=p.dataset.add==="1", base=p._addBase||new Set();
+      p.querySelectorAll(".msel-opt").forEach(o=>{ const m=(!qq||o.textContent.toLowerCase().includes(qq)); o.style.display=m?"":"none";
+        const cb=o.querySelector("input"); if(!cb) return;
+        if(qq){ cb.checked = addMode ? (m || base.has(cb.value)) : m; } });   // add mode = base ∪ matches (stable per keystroke)
+      if(addRow) addRow.classList.toggle("hidden", !qq);
+      if(!qq && addMode) p._addBase=mselChecked(p);   // finished a term — bake so the next search adds to it
+      onChange(); syncMaster();
+    });
+    searchEl.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); p.classList.add("hidden"); } });
+  }
   syncMaster();
 }
 document.addEventListener("click",ev=>{ document.querySelectorAll(".msel-panel:not(.hidden)").forEach(p=>{ const w=p.closest(".msel"); if(w&&!w.contains(ev.target)) p.classList.add("hidden"); }); });
