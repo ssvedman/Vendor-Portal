@@ -100,6 +100,7 @@ main{max-width:var(--maxw);margin:0 auto;padding:22px 24px 60px}
 .msel-opt.sel{background:var(--blue-050);font-weight:700}
 .msel-search{width:100%;padding:7px 10px;border:1.5px solid var(--line);border-radius:8px;font-size:13px;margin-bottom:6px;background:var(--card);color:var(--ink)}
 .msel-search:focus{outline:none;border-color:var(--blue)}
+.msel-master{width:100%;text-align:left;font-weight:700;border-radius:0;border-bottom:1px solid var(--line);padding:6px 8px;margin-bottom:4px}
 .msel-addrow{padding:0 2px 6px}
 .msel-add{width:100%;text-align:left;font-weight:600}
 .msel-add.on{background:var(--blue-050)}

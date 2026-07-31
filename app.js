@@ -388,27 +388,40 @@ const toolbar = inner => `<div class="toolbar">${inner}</div>`;
 function mselVisOpts(p){ return [...p.querySelectorAll(".msel-opt")].filter(o=>o.style.display!=="none").map(o=>o.querySelector("input")); }
 function wireMsel(btn,panel,all,none,search,other,onChange){ const p=$(panel); if(!p) return;
   const searchEl=$(search);
-  // Excel-style: typing applies live (matches become the selection). "Add current
-  // selection to filter" makes each new search ADD its matches instead of replacing —
-  // implemented as a toggle (not a checkbox) so it never pollutes the option reads.
-  if(searchEl && !p.querySelector(".msel-add")){
-    const row=document.createElement("div"); row.className="msel-addrow";
+  // Excel-style controls: a single "(Select all)" toggle replaces Select all / Unselect all;
+  // typing applies live (matches become the selection); "Add current selection to filter"
+  // (shown only while searching) makes each new search ADD its matches instead of replacing.
+  const act=p.querySelector(".msel-actions"); if(act) act.remove();
+  const list=p.querySelector(".msel-list");
+  const syncMaster=()=>{ const m=p.querySelector(".msel-master"); if(!m) return;
+    const q=searchEl&&searchEl.value.trim(); const vis=mselVisOpts(p); const on=vis.filter(b=>b.checked).length;
+    const box = on===0?"&#9744;" : ((vis.length&&on===vis.length)?"&#9745;":"&#9632;");
+    m.innerHTML=box+" "+(q?"Select all search results":"Select all"); };
+  if(list && !p.querySelector(".msel-master")){
+    const m=document.createElement("button"); m.type="button"; m.className="linkbtn msel-master";
+    list.parentNode.insertBefore(m,list);
+    m.addEventListener("click",()=>{ const vis=mselVisOpts(p); const allOn=vis.length&&vis.every(b=>b.checked); vis.forEach(b=>b.checked=!allOn); onChange(); syncMaster(); });
+  }
+  let addRow=p.querySelector(".msel-addrow");
+  if(searchEl && !addRow){
+    addRow=document.createElement("div"); addRow.className="msel-addrow hidden";
     const a=document.createElement("button"); a.type="button"; a.className="linkbtn msel-add";
     const paint=()=>{ const on=p.dataset.add==="1"; a.innerHTML=(on?"&#9745;":"&#9744;")+" Add current selection to filter"; a.classList.toggle("on",on); };
-    paint();
-    a.addEventListener("click",()=>{ p.dataset.add=(p.dataset.add==="1")?"0":"1"; paint(); });
-    row.appendChild(a); searchEl.after(row);
+    paint(); a.addEventListener("click",()=>{ p.dataset.add=(p.dataset.add==="1")?"0":"1"; paint(); });
+    addRow.appendChild(a); searchEl.after(addRow);
   }
   $(btn).addEventListener("click",e=>{ e.stopPropagation(); document.querySelectorAll(".msel-panel:not(.hidden)").forEach(o=>{ if(o!==p) o.classList.add("hidden"); }); p.classList.toggle("hidden"); });
-  $(all).addEventListener("click",()=>{ mselVisOpts(p).forEach(b=>b.checked=true); onChange(); });
-  $(none).addEventListener("click",()=>{ mselVisOpts(p).forEach(b=>b.checked=false); onChange(); });
-  p.addEventListener("change",onChange);
+  const allB=$(all); if(allB) allB.addEventListener("click",()=>{ mselVisOpts(p).forEach(b=>b.checked=true); onChange(); syncMaster(); });
+  const noneB=$(none); if(noneB) noneB.addEventListener("click",()=>{ mselVisOpts(p).forEach(b=>b.checked=false); onChange(); syncMaster(); });
+  p.addEventListener("change",()=>{ onChange(); syncMaster(); });
   if(searchEl) searchEl.addEventListener("input",()=>{
     const qq=searchEl.value.trim().toLowerCase(), addMode=p.dataset.add==="1";
     p.querySelectorAll(".msel-opt").forEach(o=>{ const m=(!qq||o.textContent.toLowerCase().includes(qq)); o.style.display=m?"":"none";
       const cb=o.querySelector("input"); if(qq && cb){ if(m) cb.checked=true; else if(!addMode) cb.checked=false; } });
-    onChange();
+    if(addRow) addRow.classList.toggle("hidden", !qq);
+    onChange(); syncMaster();
   });
+  syncMaster();
 }
 document.addEventListener("click",ev=>{ document.querySelectorAll(".msel-panel:not(.hidden)").forEach(p=>{ const w=p.closest(".msel"); if(w&&!w.contains(ev.target)) p.classList.add("hidden"); }); });
 function commId(name){ const c=(state.data.communities||[]).find(x=>x.name===name); return c && c.id ? c.id : null; }
