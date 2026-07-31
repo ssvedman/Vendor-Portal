@@ -387,11 +387,28 @@ function syncTabMenu(){ document.querySelectorAll(".side-tab").forEach(t=>t.clas
 const toolbar = inner => `<div class="toolbar">${inner}</div>`;
 function mselVisOpts(p){ return [...p.querySelectorAll(".msel-opt")].filter(o=>o.style.display!=="none").map(o=>o.querySelector("input")); }
 function wireMsel(btn,panel,all,none,search,other,onChange){ const p=$(panel); if(!p) return;
+  const searchEl=$(search);
+  // Excel-style: typing applies live (matches become the selection). "Add current
+  // selection to filter" makes each new search ADD its matches instead of replacing —
+  // implemented as a toggle (not a checkbox) so it never pollutes the option reads.
+  if(searchEl && !p.querySelector(".msel-add")){
+    const row=document.createElement("div"); row.className="msel-addrow";
+    const a=document.createElement("button"); a.type="button"; a.className="linkbtn msel-add";
+    const paint=()=>{ const on=p.dataset.add==="1"; a.innerHTML=(on?"&#9745;":"&#9744;")+" Add current selection to filter"; a.classList.toggle("on",on); };
+    paint();
+    a.addEventListener("click",()=>{ p.dataset.add=(p.dataset.add==="1")?"0":"1"; paint(); });
+    row.appendChild(a); searchEl.after(row);
+  }
   $(btn).addEventListener("click",e=>{ e.stopPropagation(); document.querySelectorAll(".msel-panel:not(.hidden)").forEach(o=>{ if(o!==p) o.classList.add("hidden"); }); p.classList.toggle("hidden"); });
   $(all).addEventListener("click",()=>{ mselVisOpts(p).forEach(b=>b.checked=true); onChange(); });
   $(none).addEventListener("click",()=>{ mselVisOpts(p).forEach(b=>b.checked=false); onChange(); });
   p.addEventListener("change",onChange);
-  $(search).addEventListener("input",()=>{ const qq=$(search).value.trim().toLowerCase(); p.querySelectorAll(".msel-opt").forEach(o=>{ o.style.display=(!qq||o.textContent.toLowerCase().includes(qq))?"":"none"; }); });
+  if(searchEl) searchEl.addEventListener("input",()=>{
+    const qq=searchEl.value.trim().toLowerCase(), addMode=p.dataset.add==="1";
+    p.querySelectorAll(".msel-opt").forEach(o=>{ const m=(!qq||o.textContent.toLowerCase().includes(qq)); o.style.display=m?"":"none";
+      const cb=o.querySelector("input"); if(qq && cb){ if(m) cb.checked=true; else if(!addMode) cb.checked=false; } });
+    onChange();
+  });
 }
 document.addEventListener("click",ev=>{ document.querySelectorAll(".msel-panel:not(.hidden)").forEach(p=>{ const w=p.closest(".msel"); if(w&&!w.contains(ev.target)) p.classList.add("hidden"); }); });
 function commId(name){ const c=(state.data.communities||[]).find(x=>x.name===name); return c && c.id ? c.id : null; }
