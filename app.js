@@ -460,7 +460,7 @@ function viewByCommunity(){
   const comms=[...d.communities].filter(c=>active.has(c.name)).sort((a,b)=>a.name.localeCompare(b.name));
   if(!comms.length){ $("viewArea").innerHTML=`<div class="empty">No communities have starts in the selected date range — widen the range above.</div>`; return; }
   $("viewArea").innerHTML=`
-    ${toolbar(`<div class="msel" id="commPickMsel" style="max-width:360px;flex:1">
+    ${toolbar(`<div class="msel" id="commPickMsel" style="min-width:240px">
         <button type="button" class="msel-btn" id="commPickBtn">Select community…</button>
         <div class="msel-panel hidden" id="commPickPanel">
           <input type="text" class="msel-search" id="commPickSearch" placeholder="Search communities…">
