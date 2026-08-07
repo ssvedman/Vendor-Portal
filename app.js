@@ -401,32 +401,48 @@ function wireMsel(btn,panel,all,none,search,other,onChange){ const p=$(panel); i
   if(list && !p.querySelector(".msel-master")){
     const m=document.createElement("button"); m.type="button"; m.className="linkbtn msel-master";
     list.parentNode.insertBefore(m,list);
-    m.addEventListener("click",()=>{ const vis=mselVisOpts(p); const allOn=vis.length&&vis.every(b=>b.checked); vis.forEach(b=>b.checked=!allOn); onChange(); syncMaster(); });
+    m.addEventListener("click",()=>{ const vis=mselVisOpts(p); const allOn=vis.length&&vis.every(b=>b.checked); vis.forEach(b=>b.checked=!allOn); if(!allOn&&p._lock)p._lock.clear(); onChange(); syncMaster(); if(p._paintAdd)p._paintAdd(); });
   }
-  let addRow=p.querySelector(".msel-addrow");
+  if(!p._lock) p._lock=new Set();
+  let addRow=p.querySelector(".msel-addrow"), addNote=null;
   if(searchEl && !addRow){
     addRow=document.createElement("div"); addRow.className="msel-addrow hidden";
     const a=document.createElement("button"); a.type="button"; a.className="linkbtn msel-add";
-    const paint=()=>{ const on=p.dataset.add==="1"; a.innerHTML=(on?"&#9745;":"&#9744;")+" Add current selection to filter"; a.classList.toggle("on",on); };
-    paint(); a.addEventListener("click",()=>{ p.dataset.add=(p.dataset.add==="1")?"0":"1"; if(p.dataset.add==="1") p._addBase=mselChecked(p); paint(); });
-    addRow.appendChild(a); searchEl.after(addRow);
-  }
+    a.innerHTML="&#10133; Add current results to filter";
+    addNote=document.createElement("span"); addNote.className="msel-addnote";
+    a.addEventListener("click",()=>{
+      mselVisOpts(p).forEach(b=>{ if(b.checked) p._lock.add(b.value); });  // keep current results
+      searchEl.value="";
+      p.querySelectorAll(".msel-opt").forEach(o=>{ o.style.display=""; const cb=o.querySelector("input"); if(cb) cb.checked=p._lock.has(cb.value); });
+      paintAdd(); onChange(); syncMaster(); searchEl.focus();
+    });
+    addRow.appendChild(a); addRow.appendChild(addNote); searchEl.after(addRow);
+  } else if(addRow){ addNote=addRow.querySelector(".msel-addnote"); }
+  const paintAdd=()=>{ const q=searchEl&&searchEl.value.trim(), n=p._lock.size;
+    if(addRow) addRow.classList.toggle("hidden", !(q||n));
+    if(addNote) addNote.innerHTML=n?`${n} kept &middot; <a href="#" class="msel-clearadd">clear</a>`:""; };
+  p._paintAdd=paintAdd;
+  if(addRow) addRow.addEventListener("click",e=>{ const c=e.target.closest(".msel-clearadd"); if(c){ e.preventDefault(); p._lock.clear();
+    const q=searchEl.value.trim().toLowerCase();
+    p.querySelectorAll(".msel-opt").forEach(o=>{ const m=(!q||o.textContent.toLowerCase().includes(q)); const cb=o.querySelector("input"); if(cb&&q) cb.checked=m; });
+    paintAdd(); onChange(); syncMaster(); } });
   $(btn).addEventListener("click",e=>{ e.stopPropagation(); document.querySelectorAll(".msel-panel:not(.hidden)").forEach(o=>{ if(o!==p) o.classList.add("hidden"); }); p.classList.toggle("hidden"); });
   const allB=$(all); if(allB) allB.addEventListener("click",()=>{ mselVisOpts(p).forEach(b=>b.checked=true); onChange(); syncMaster(); });
   const noneB=$(none); if(noneB) noneB.addEventListener("click",()=>{ mselVisOpts(p).forEach(b=>b.checked=false); onChange(); syncMaster(); });
   p.addEventListener("change",()=>{ onChange(); syncMaster(); });
   if(searchEl){
     searchEl.addEventListener("input",()=>{
-      const qq=searchEl.value.trim().toLowerCase(), addMode=p.dataset.add==="1", base=p._addBase||new Set();
+      const qq=searchEl.value.trim().toLowerCase();
       p.querySelectorAll(".msel-opt").forEach(o=>{ const m=(!qq||o.textContent.toLowerCase().includes(qq)); o.style.display=m?"":"none";
         const cb=o.querySelector("input"); if(!cb) return;
-        if(qq){ cb.checked = addMode ? (m || base.has(cb.value)) : m; } });   // add mode = base ∪ matches (stable per keystroke)
-      if(addRow) addRow.classList.toggle("hidden", !qq);
-      if(!qq && addMode) p._addBase=mselChecked(p);   // finished a term — bake so the next search adds to it
+        // current matches become the selection; anything already "kept" stays selected → searches accumulate
+        if(qq){ cb.checked = m || p._lock.has(cb.value); } });
+      paintAdd();
       onChange(); syncMaster();
     });
     searchEl.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); p.classList.add("hidden"); } });
   }
+  paintAdd();
   syncMaster();
 }
 document.addEventListener("click",ev=>{ document.querySelectorAll(".msel-panel:not(.hidden)").forEach(p=>{ const w=p.closest(".msel"); if(w&&!w.contains(ev.target)) p.classList.add("hidden"); }); });
@@ -444,7 +460,13 @@ function viewByCommunity(){
   const comms=[...d.communities].filter(c=>active.has(c.name)).sort((a,b)=>a.name.localeCompare(b.name));
   if(!comms.length){ $("viewArea").innerHTML=`<div class="empty">No communities have starts in the selected date range — widen the range above.</div>`; return; }
   $("viewArea").innerHTML=`
-    ${toolbar(`<select id="commPick">${comms.map(c=>`<option value="${esc(c.name)}">${esc(commLabel(c.name))}</option>`).join("")}</select>
+    ${toolbar(`<div class="msel" id="commPickMsel" style="max-width:360px;flex:1">
+        <button type="button" class="msel-btn" id="commPickBtn">Select community…</button>
+        <div class="msel-panel hidden" id="commPickPanel">
+          <input type="text" class="msel-search" id="commPickSearch" placeholder="Search communities…">
+          <div class="msel-list" id="commPickList"></div>
+        </div>
+      </div>
       <div class="msel" id="bcCatMsel">
         <button type="button" class="msel-btn" id="bcCatBtn">All trades</button>
         <div class="msel-panel hidden" id="bcCatPanel">
@@ -456,8 +478,9 @@ function viewByCommunity(){
       <button class="btn mini ghost" id="commExport">Export CSV</button>
       <span class="count" id="commCount"></span>`)}
     <div class="panel"><div id="commBody"></div></div>`;
+  let curComm=comms[0].name;
   const render=()=>{
-    const comm=$("commPick").value;
+    const comm=curComm;
     const cbx=[...$("bcCatPanel").querySelectorAll("input[type=checkbox]")];
     const selCat=new Set(cbx.filter(b=>b.checked).map(b=>b.value)); const allCat=selCat.size===cbx.length;
     $("bcCatBtn").textContent=allCat?"All trades":(selCat.size===0?"No trades":selCat.size+" trades");
@@ -472,7 +495,19 @@ function viewByCommunity(){
       :`<div class="empty">No vendors match.</div>`;
     window._exp=()=>exportCSV(`${comm}_vendors`,["Category","Trade Partner","Supplier #","Trade Code"],rows.map(v=>[v.category,v.name,v.supplierCode,v.tradeCode]));
   };
-  $("commPick").addEventListener("change",render);
+  // searchable single-select community picker
+  const buildCommList=()=>{
+    const q=$("commPickSearch").value.trim().toLowerCase();
+    const list=comms.filter(c=>!q||commLabel(c.name).toLowerCase().includes(q)||c.name.toLowerCase().includes(q));
+    $("commPickList").innerHTML=(list.length?list:[]).map(c=>`<div class="msel-opt comm-opt${c.name===curComm?" sel":""}" data-comm="${esc(c.name)}">${esc(commLabel(c.name))}</div>`).join("")
+      || `<div class="msel-opt" style="color:var(--muted)">No communities match.</div>`;
+  };
+  $("commPickBtn").textContent=commLabel(curComm);
+  $("commPickBtn").addEventListener("click",e=>{ e.stopPropagation(); document.querySelectorAll(".msel-panel:not(.hidden)").forEach(p=>{ if(p!==$("commPickPanel")) p.classList.add("hidden"); }); const hid=$("commPickPanel").classList.toggle("hidden"); if(!hid){ buildCommList(); $("commPickSearch").focus(); } });
+  $("commPickSearch").addEventListener("input",buildCommList);
+  $("commPickSearch").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); const first=$("commPickList").querySelector(".comm-opt"); if(first){ curComm=first.dataset.comm; $("commPickBtn").textContent=commLabel(curComm); $("commPickPanel").classList.add("hidden"); render(); } } });
+  $("commPickList").addEventListener("click",e=>{ const o=e.target.closest(".comm-opt"); if(!o) return; curComm=o.dataset.comm; $("commPickBtn").textContent=commLabel(curComm); $("commPickPanel").classList.add("hidden"); render(); });
+  window._commSelect=name=>{ if(comms.some(c=>c.name===name)){ curComm=name; $("commPickBtn").textContent=commLabel(curComm); render(); } };
   wireMsel("bcCatBtn","bcCatPanel","bcCatAll","bcCatNone","bcCatSearch",null,render);
   $("commExport").addEventListener("click",()=>window._exp()); render();
 }
@@ -841,7 +876,7 @@ function setupGlobalSearch(){
 function activateTab(view){ document.querySelectorAll(".tab").forEach(t=>{t.classList.toggle("active",t.dataset.view===view);}); state.view=view; syncTabMenu(); }
 function jumpTo(type,val){
   showDashboard();
-  if(type==="community"){ activateTab("community"); renderView(); const s=$("commPick"); if(s){s.value=val; s.dispatchEvent(new Event("change"));} }
+  if(type==="community"){ activateTab("community"); renderView(); if(window._commSelect) window._commSelect(val); }
   else if(type==="vendor"){ activateTab("vendor"); renderView(); if(window._vSelect) window._vSelect(val); }
   else if(type==="category"){ activateTab("coverage"); coverageMode="trade"; renderView(); if(window._cgSelect) window._cgSelect(val); }
 }
