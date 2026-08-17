@@ -954,7 +954,7 @@ async function genResetLink(){
     const {data,error}=await sb.rpc("admin_add_or_reset",{target_email:email});
     if(error) throw error;
     const token=data&&data.token; if(!token) throw new Error("No link was returned.");
-    const url=location.origin+location.pathname+"#recover="+encodeURIComponent(token);
+    const url=((CFG.BLUEPRINT_URL||(location.origin+location.pathname)).replace(/#.*$/,""))+"#recover="+encodeURIComponent(token);
     $("resetLink").value=url; $("resetOut").classList.remove("hidden");
     resetMsg((data.created?"New account created for ":"Reset link ready for ")+email+" — copy the link and send it. It expires in 24 hours.","ok");
   }catch(e){ resetMsg(prettyErr(e,"Could not generate a link."),"err"); }
