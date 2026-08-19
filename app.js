@@ -1173,9 +1173,19 @@ function buildDivision(key, re2wb, startswb){
   let startRecords=[];
   const idName={}; // community id -> name (from starts jobs)
   if (startswb){
-    // detect format by sheet + headers
+    /* detect format by sheet + headers.
+
+       "Permit Log" is named here, last, because the Orlando workbook has neither
+       "Start Log" nor "START SCHEDULE" — it reached its data only through the
+       first-sheet fallback below, and only because Permit Log happens to be the
+       first tab in that file. Reorder the tabs and this would have parsed
+       "Drivers" (twelve rows) and replaced the division with it, silently.
+
+       Last, not first, so this is a no-op on every real file: a workbook with a
+       Start Log still resolves to Start Log exactly as before. */
     let sheet = startswb.SheetNames.includes("Start Log") ? "Start Log"
               : startswb.SheetNames.includes("START SCHEDULE") ? "START SCHEDULE"
+              : startswb.SheetNames.includes("Permit Log") ? "Permit Log"
               : firstSheet(startswb);
     const rows=XLSX.utils.sheet_to_json(fixRange(startswb.Sheets[sheet]),{defval:null});
     for (const r of rows){
@@ -1184,7 +1194,20 @@ function buildDivision(key, re2wb, startswb){
       else if (r["Project"]!=null){ const proj=S(r["Project"])||""; comm=proj.includes(" - ")?proj.split(" - ").slice(1).join(" - ").trim():proj; const a=r["ActStart"],p=r["PrjStart"]; date=xlDate(a||p); kind=a?"Actual":"Projected"; job=r["Job"]; }
       if(!comm||!date) continue;
       startRecords.push({community:comm,date,kind});
-      const id=digits(job); if(id.length>=11) idName[id.slice(0,7)+"0000"]=comm;
+      /* Seven digits of community, then a lot number of whatever width. The
+         threshold was 11, which only ever looked right because most job numbers
+         happen to be that long: 485 of the 6,674 jobs in the Orlando permit log
+         carry a 3-digit lot rather than a 4-digit one, and every one of them was
+         skipped here, so its community never learned its name from the starts log
+         and fell back to the RE2 Description spelling instead.
+
+         The visible effect was duplicate communities — "Meadow Pointe 50" beside
+         "Meadowpointe 50", "Bellamy 50s Majors" beside "Bellamy 50 MAJ". Fixing
+         the threshold collapses each pair onto the permit-log spelling, which is
+         the one the field actually uses: Orlando 531 → 528 communities, Tampa
+         637 → 633. Every removed name has a surviving equivalent; nothing is
+         lost. Takeoff Flow has always used 7. */
+      const id=digits(job); if(id.length>=7) idName[id.slice(0,7)+"0000"]=comm;
     }
   }
 

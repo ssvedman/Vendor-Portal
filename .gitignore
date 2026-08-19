@@ -1,0 +1,53 @@
+# Vendor Assignments Portal — repository hygiene
+#
+# This repo is public and the site is served from its root, so anything committed
+# here is published. It has no build step and no dependencies; these patterns
+# exist so that a stray install or a scratch file cannot end up deployed.
+
+# ---- dependencies -----------------------------------------------------------
+# The app has none. A local `npm install` to run a one-off script writes these.
+node_modules/
+package.json
+package-lock.json
+npm-shrinkwrap.json
+yarn.lock
+pnpm-lock.yaml
+npm-debug.log*
+
+# ---- secrets ----------------------------------------------------------------
+# config.js IS committed on purpose: it holds only the Supabase anon key, which
+# is public by design — row-level security is the boundary, not key secrecy, and
+# the sibling apps commit the same value. A service-role key must never be, so
+# anything shaped like one stays out.
+*service_role*
+*.secret
+.env
+.env.*
+secrets.json
+
+# ---- scratch ----------------------------------------------------------------
+*.local.*
+*_scratch.*
+scratch/
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig
+*.rej
+
+# ---- source workbooks -------------------------------------------------------
+# The RE2 export and the division starts logs are business data and are not small.
+# They are uploaded through the app, never committed.
+*.xlsx
+*.xlsm
+*.xls
+
+# ---- editor / OS ------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
