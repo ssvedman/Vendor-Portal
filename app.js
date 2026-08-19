@@ -1109,12 +1109,12 @@ async function tryBuildPreview(){
     let current=state.cache[key]||null;
     if(!current && !DEMO && sb){ try{ const {data}=await sb.from("division_data").select("payload").eq("key",key).maybeSingle(); current=(data&&data.payload)||null; }catch(e){} }
     const diff = current ? diffPayload(current, parsed) : null;
-    const warns=[];
+    const warns=[], infos=[];
     if(uploadFiles.re2){
       const codes=Object.keys(diag.divCounts||{}).sort((a,b)=>diag.divCounts[b]-diag.divCounts[a]);
       const match=diag.divCounts?(diag.divCounts[diag.code]||0):0;
       if(match===0 && diag.re2Rows>0) warns.push(`No rows in this file match division <b>${esc(diag.code)}</b> — this looks like the wrong file.`);
-      else if(codes[0] && codes[0]!==diag.code) warns.push(`This file is mostly division <b>${esc(codes[0])}</b>; only ${fmt(match)} of ${fmt(diag.re2Rows)} rows are <b>${esc(diag.code)}</b>.`);
+      else if(codes.length>1) infos.push(`This file covers multiple divisions. Only the <b>${fmt(match)}</b> <b>${esc(diag.code)}</b> rows will be imported for ${esc(parsed.division)}; the other ${fmt(diag.re2Rows-match)} rows (other divisions) are ignored.`);
       if((diag.unmatched||[]).length) warns.push(`${fmt(diag.unmatched.length)} communities couldn't be matched to a name (shown by ID) — upload the matching starts file for best names.`);
     }
     if(current && diff){
@@ -1128,6 +1128,7 @@ async function tryBuildPreview(){
     const diffHtml = diff
       ? `<div class="diffrow"><span class="dl">Changes vs current:</span><span class="chip good-chip">+${fmt(diff.commsAdded)} comm</span><span class="chip bad-chip">-${fmt(diff.commsRemoved)} comm</span><span class="chip">assign +${fmt(diff.assignmentsAdded)}/-${fmt(diff.assignmentsRemoved)}</span><span class="chip">vendors +${fmt(diff.vendorsAdded)}/-${fmt(diff.vendorsRemoved)}</span></div>`
       : `<p class="tiny">First upload for this division — nothing to compare against.</p>`;
+    const infoHtml = infos.length ? `<div class="infobox">${infos.map(w=>`<div>${w}</div>`).join("")}</div>` : "";
     const warnHtml = warns.length ? `<div class="warnbox"><b>Review before publishing</b><ul>${warns.map(w=>`<li>${w}</li>`).join("")}</ul></div>` : "";
     $("previewBody").innerHTML=`
       <div class="kpis" style="margin:6px 0 12px">
@@ -1136,7 +1137,7 @@ async function tryBuildPreview(){
         <div class="kpi"><div class="n">${fmt(parsed.categories.length)}</div><div class="l">Categories</div></div>
         <div class="kpi"><div class="n">${fmt((parsed.startRecords||[]).length)}</div><div class="l">Start records</div></div>
       </div>
-      ${diffHtml}${warnHtml}
+      ${diffHtml}${infoHtml}${warnHtml}
       <p class="tiny" style="text-align:left">Sources: ${uploadFiles.re2?esc(uploadFiles.re2.name):"<i>no RE2 file</i>"} · ${uploadFiles.starts?esc(uploadFiles.starts.name):"<i>no starts file</i>"}</p>
       <button class="btn${warns.length?' ghost':''}" id="publishBtn">Publish — replace ${esc($("adminDiv").selectedOptions[0].text)} data</button>`;
     $("publishBtn").addEventListener("click",()=>{
