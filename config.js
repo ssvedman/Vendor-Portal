@@ -1,7 +1,10 @@
 /* ============================================================
    CONFIG — edit this file to connect your backend.
-   Leave the placeholders as-is to run in DEMO mode
-   (any @lennar.com email, data read from /data/*.json).
+   Blanking SUPABASE_URL (or leaving it as YOUR_...) drops the app into DEMO mode:
+   sign-in accepts any @lennar.com address with any non-empty password, and each
+   division is read from data/<key>.json instead of Supabase. Those JSON files are
+   NOT in this repo, so demo mode reports "Data file not found" until you add them;
+   publishing, reset links and change history are all disabled in demo mode.
    ============================================================ */
 window.APP_CONFIG = {
   // Paste from Supabase > Project Settings > API

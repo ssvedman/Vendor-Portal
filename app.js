@@ -22,9 +22,10 @@ if (!DEMO && window.supabase) {
 }
 
 const state = { email:null, role:"viewer", roleDivs:[], divKey:null, data:null,
-                view:"community", cache:{}, range:{...CFG.DEFAULT_RANGE}, coreFrac:0.5 };
+                view:"community", cache:{}, range:{...CFG.DEFAULT_RANGE}, coreFrac:0.5, loadSeq:0 };
 const $  = id => document.getElementById(id);
 const esc = s => String(s==null?"":s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const fmt = n => (n==null||isNaN(n))?"—":Number(n).toLocaleString();
 const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 (function(){ try{ const t=localStorage.getItem("vp_theme"); if(t) document.documentElement.setAttribute("data-theme",t);
@@ -138,7 +139,7 @@ async function enterApp(email){
 
   await loadDivisionsFromDB();
   const sel=$("divisionSel");
-  sel.innerHTML=CFG.DIVISIONS.map(d=>`<option value="${d.key}">${esc(d.label)}</option>`).join("");
+  sel.innerHTML=CFG.DIVISIONS.map(d=>`<option value="${esc(d.key)}">${esc(d.label)}</option>`).join("");
   sel.addEventListener("change",()=>loadDivision(sel.value));
 
   // date range
@@ -190,20 +191,28 @@ function onRange(){
 }
 
 async function loadDivision(key){
+  /* Switch divisions twice in quick succession and the slower first response used to
+     land last, painting the old division over the new one. Every await below rechecks
+     the generation and bails if a newer loadDivision has started. */
+  const seq=++state.loadSeq;
   state.divKey=key; savePrefs();
   $("viewArea").innerHTML=`<div class="empty">Loading…</div>`;
   try {
     if (state.cache[key]){ state.data=state.cache[key]; }
     else {
       let data;
-      if (DEMO){ const res=await fetch(`data/${key}.json`); if(!res.ok) throw new Error("Data file not found"); data=await res.json(); }
+      if (DEMO){ const res=await fetch(`data/${key}.json`); if(seq!==state.loadSeq) return;
+                 if(!res.ok) throw new Error("Data file not found"); data=await res.json(); if(seq!==state.loadSeq) return; }
       else { const {data:row,error}=await sb.from("division_data").select("payload,updated_at,updated_by").eq("key",key).single();
+             if(seq!==state.loadSeq) return;
              if(error) throw error; data=row.payload; data._updated=row.updated_at; data._by=row.updated_by; }
       state.cache[key]=data; state.data=data;
     }
     await loadChanges(key);
+    if(seq!==state.loadSeq) return;
     renderAll();
-  } catch(e){ $("viewArea").innerHTML=`<div class="empty">Could not load ${esc(key)}: ${esc(e.message)}</div>`; }
+  } catch(e){ if(seq!==state.loadSeq) return;
+    $("viewArea").innerHTML=`<div class="empty">Could not load ${esc(key)}: ${esc(e.message)}</div>`; }
 }
 
 function renderAll(){ renderBanner(); renderKPIs(); updateWarnBadge(); renderView(); }
@@ -288,7 +297,15 @@ function renderBanner(){
     + ` <button class="linkbtn changesBtn${unread?' has-changes':''}" id="changesBtn">View changes${unread?'<span class="notif-dot" aria-label="major change"></span>':''}</button>`;
   const b=$("changesBtn"); if(b) b.addEventListener("click",openChanges);
 }
-function loadPrefs(){ try{ return JSON.parse(localStorage.getItem("vp_prefs")||"{}"); }catch(e){ return {}; } }
+function loadPrefs(){
+  let p; try{ p=JSON.parse(localStorage.getItem("vp_prefs")||"{}"); }catch(e){ p=null; }
+  if(!p || typeof p!=="object" || Array.isArray(p)) return {};
+  /* localStorage is user-writable and from/to are interpolated into range labels and
+     compared against every start date — take the pair only if both are plain ISO dates
+     in order, otherwise fall back to DEFAULT_RANGE. */
+  if(!(ISO_DATE.test(String(p.from||"")) && ISO_DATE.test(String(p.to||"")) && p.from<=p.to)){ delete p.from; delete p.to; }
+  return p;
+}
 function savePrefs(){ try{ localStorage.setItem("vp_prefs",JSON.stringify({divKey:state.divKey,from:state.range.from,to:state.range.to,view:state.view})); }catch(e){} }
 async function loadChanges(key){
   state.changes=[];
@@ -325,7 +342,7 @@ function openChanges(){
         <div class="chg-detail hidden" id="chgd-${i}">${detail}</div>
       </div>`; };
   const listHtml=list=> list.length? list.map((r,i)=>card(r,i)).join("") : `<div class="empty">No updates for this division.</div>`;
-  const filterOpts=`<option value="">All divisions</option>${CFG.DIVISIONS.map(d=>`<option value="${d.key}">${esc(d.label)}</option>`).join("")}`;
+  const filterOpts=`<option value="">All divisions</option>${CFG.DIVISIONS.map(d=>`<option value="${esc(d.key)}">${esc(d.label)}</option>`).join("")}`;
   const shell = all.length
     ? `<div class="chg-filter"><label for="chgFilter">Division</label><select id="chgFilter">${filterOpts}</select><span class="count" id="chgCount"></span></div><div id="chgList"></div>`
     : `<div class="empty">No updates recorded yet${DEMO?" (demo mode - change history needs the backend)":""}.</div>`;
@@ -358,7 +375,7 @@ function openVendor(name){
   const allC=new Set(); rows.forEach(v=>v.assigned.forEach(c=>allC.add(c)));
   const totalStarts=[...allC].reduce((s,c)=>s+(byComm[c]||0),0);
   const trades=rows.slice().sort((a,b)=>(a.category||"").localeCompare(b.category||""));
-  const body=`<div class="vd-meta">${sup?`<span class="sup">#${esc(sup)}</span> &middot; `:""}${trades.length} trade${trades.length===1?"":"s"} &middot; ${allC.size} communities &middot; ${fmt(totalStarts)} starts in range (${state.range.from} to ${state.range.to})</div>`
+  const body=`<div class="vd-meta">${sup?`<span class="sup">#${esc(sup)}</span> &middot; `:""}${trades.length} trade${trades.length===1?"":"s"} &middot; ${allC.size} communities &middot; ${fmt(totalStarts)} starts in range (${esc(state.range.from)} to ${esc(state.range.to)})</div>`
     + trades.map(v=>{ const st=v.assigned.reduce((s,c)=>s+(byComm[c]||0),0);
         return `<div class="vd-trade"><div class="vd-trade-h">${esc(v.category||"—")} <span class="cat-tag">${v.assigned.length} communities &middot; ${fmt(st)} starts</span></div>`
           +`<div class="vd-comms">${v.assigned.slice().sort().map(c=>`<span class="chip">${esc(commLabel(c))}</span>`).join("")||'<span class="tiny">no communities in range</span>'}</div></div>`; }).join("");
@@ -806,7 +823,7 @@ function viewStarts(){
   const topComm=[...agg.rows].sort((a,b)=>b.total-a.total).slice(0,12);
   $("viewArea").innerHTML=`
     <div class="starts-charts">
-      <div class="panel"><div class="panel-h">Starts per month — ${esc(d.division)} <span class="range-note">${state.range.from} → ${state.range.to}</span></div>
+      <div class="panel"><div class="panel-h">Starts per month — ${esc(d.division)} <span class="range-note">${esc(state.range.from)} → ${esc(state.range.to)}</span></div>
         <div class="chart-box"><div class="chart-h chart-h-tall"><canvas id="chMonth"></canvas></div></div></div>
       <div class="panel"><div class="panel-h">Top communities by starts (in range)</div>
         <div class="chart-box"><div class="chart-h chart-h-tall"><canvas id="chComm"></canvas></div></div></div>
@@ -895,8 +912,13 @@ function jumpTo(type,val){
 function exportCSV(name,headers,rows){
   const q=s=>{ let v=String(s==null?"":s); if(/^[=+\-@\t\r]/.test(v)) v="'"+v; return `"${v.replace(/"/g,'""')}"`; };
   const csv=[headers.map(q).join(","),...rows.map(r=>r.map(q).join(","))].join("\n");
-  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
-  a.download=name+".csv"; a.click(); URL.revokeObjectURL(a.href);
+  /* Anchor has to be in the document for the click to count as user-initiated in
+     Firefox, and the object URL has to outlive the click — revoking it inline can
+     cancel the download before the browser has read the blob. */
+  const url=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  const a=document.createElement("a"); a.href=url; a.download=name+".csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
 /* ---------------- ADMIN ---------------- */
@@ -910,7 +932,7 @@ function renderPerms(){
   const p=$("permsPanel");
   if(!isAdmin()){ p.classList.add("hidden"); return; }
   p.classList.remove("hidden");
-  const divChecks=CFG.DIVISIONS.map(d=>`<label class="permchk"><input type="checkbox" value="${d.key}" class="permDiv"> ${esc(d.label)}</label>`).join("");
+  const divChecks=CFG.DIVISIONS.map(d=>`<label class="permchk"><input type="checkbox" value="${esc(d.key)}" class="permDiv"> ${esc(d.label)}</label>`).join("");
   p.innerHTML=`<div class="panel"><div class="panel-h">Access &amp; permissions</div>
     <div style="padding:16px">
       <p class="tiny" style="margin:0 0 12px">Everyone at ${esc(CFG.ALLOWED_DOMAIN)} can view. Grant <b>editor</b> (upload for chosen divisions) or <b>admin</b> (full access) below.</p>
@@ -1018,6 +1040,9 @@ function renderPermList(){
   list.querySelectorAll(".permInvite").forEach(b=>b.addEventListener("click",()=>invitePerm(b.dataset.email)));
 }
 function invitePerm(email){
+  /* This mints a live credential — anyone holding the link can set that account's
+     password for 24 hours — so it gets the same confirm as Remove. */
+  if(!confirm(`Generate a password-reset link for ${email}?\n\nAnyone with the link can set this account's password for the next 24 hours.`)) return;
   const inp=$("resetEmail"); if(inp) inp.value=email;
   const panel=$("resetPanel"); if(panel) panel.scrollIntoView({behavior:"smooth",block:"start"});
   genResetLink();
@@ -1067,8 +1092,11 @@ function showDashboard(){ $("admin").classList.add("hidden"); $("dashboard").cla
 let uploadFiles={ re2:null, starts:null };
 function initAdmin(){
   const sel=$("adminDiv");
+  /* No fallback to every division: an editor with an empty divisions list used to be
+     offered the full list here, and only RLS stopped the upload. Show nothing instead. */
   const opts=CFG.DIVISIONS.filter(dv=>canEdit(dv.key));
-  sel.innerHTML=(opts.length?opts:CFG.DIVISIONS).map(d=>`<option value="${d.key}">${esc(d.label)}</option>`).join("");
+  sel.innerHTML=opts.map(d=>`<option value="${esc(d.key)}">${esc(d.label)}</option>`).join("");
+  if(!opts.length){ sel.disabled=true; adminMsg("No divisions assigned to your account — ask an admin to grant you one before uploading.","err"); }
   wireTile("tileRe2","re2Input","re2");
   wireTile("tileStarts","startsInput","starts");
   $("re2Input").addEventListener("change",e=>{ if(e.target.files[0]) loadUpload("re2",e.target.files[0]); e.target.value=""; });
@@ -1101,13 +1129,18 @@ async function loadUpload(kind,file){
 
 async function tryBuildPreview(){
   const key=$("adminDiv").value;
+  if(!key) return adminMsg("No divisions assigned to your account — ask an admin to grant you one before uploading.","err");
   if(!uploadFiles.re2 && !uploadFiles.starts){ return; }
   adminMsg("Parsing…","info");
   try {
-    const parsed=buildDivision(key, uploadFiles.re2 && uploadFiles.re2.wb, uploadFiles.starts && uploadFiles.starts.wb);
-    const diag=parsed._diag||{};
+    /* Resolve the currently-published payload BEFORE parsing. A starts-only upload keeps
+       the existing vendor matrix, and buildDivision needs it handed in: it used to read
+       state.cache[key], which is empty until the division has been opened on the
+       dashboard, so a starts-only upload from a fresh session published an empty matrix. */
     let current=state.cache[key]||null;
     if(!current && !DEMO && sb){ try{ const {data}=await sb.from("division_data").select("payload").eq("key",key).maybeSingle(); current=(data&&data.payload)||null; }catch(e){} }
+    const parsed=buildDivision(key, uploadFiles.re2 && uploadFiles.re2.wb, uploadFiles.starts && uploadFiles.starts.wb, current);
+    const diag=parsed._diag||{};
     const diff = current ? diffPayload(current, parsed) : null;
     const warns=[], infos=[];
     if(uploadFiles.re2){
@@ -1116,6 +1149,7 @@ async function tryBuildPreview(){
       if(match===0 && diag.re2Rows>0) warns.push(`No rows in this file match division <b>${esc(diag.code)}</b> — this looks like the wrong file.`);
       else if(codes.length>1) infos.push(`This file covers multiple divisions. Only the <b>${fmt(match)}</b> <b>${esc(diag.code)}</b> rows will be imported for ${esc(parsed.division)}; the other ${fmt(diag.re2Rows-match)} rows (other divisions) are ignored.`);
       if((diag.unmatched||[]).length) warns.push(`${fmt(diag.unmatched.length)} communities couldn't be matched to a name (shown by ID) — upload the matching starts file for best names.`);
+      if(diag.blankDiv) warns.push(`${fmt(diag.blankDiv)} of ${fmt(diag.re2Rows)} rows have a blank <b>Division</b> and were skipped — an export missing that column imports nothing.`);
     }
     if(current && diff){
       if(parsed.communities.length < current.communities.length*0.3)
@@ -1123,13 +1157,18 @@ async function tryBuildPreview(){
       const curA=current.vendors.reduce((s,v)=>s+v.assigned.length,0), newA=parsed.vendors.reduce((s,v)=>s+v.assigned.length,0);
       if(newA < curA*0.3) warns.push(`Removes over 70% of trade assignments (${fmt(curA)} → ${fmt(newA)}).`);
     }
-    window._parsed=parsed;
+    /* Hard stop, not a warning: wiping a published vendor matrix down to nothing is
+       never a legitimate upload, and the 70%-shrink warning above doesn't fire when
+       the "before" side is the one that's missing. */
+    const curVendors=(current&&current.vendors)?current.vendors.length:0;
+    const blocked = parsed.vendors.length===0 && curVendors>0;
     $("previewPanel").classList.remove("hidden");
     const diffHtml = diff
       ? `<div class="diffrow"><span class="dl">Changes vs current:</span><span class="chip good-chip">+${fmt(diff.commsAdded)} comm</span><span class="chip bad-chip">-${fmt(diff.commsRemoved)} comm</span><span class="chip">assign +${fmt(diff.assignmentsAdded)}/-${fmt(diff.assignmentsRemoved)}</span><span class="chip">vendors +${fmt(diff.vendorsAdded)}/-${fmt(diff.vendorsRemoved)}</span></div>`
       : `<p class="tiny">First upload for this division — nothing to compare against.</p>`;
     const infoHtml = infos.length ? `<div class="infobox">${infos.map(w=>`<div>${w}</div>`).join("")}</div>` : "";
     const warnHtml = warns.length ? `<div class="warnbox"><b>Review before publishing</b><ul>${warns.map(w=>`<li>${w}</li>`).join("")}</ul></div>` : "";
+    const blockHtml = blocked ? `<div class="warnbox"><b>Publishing is blocked</b><ul><li>This upload has <b>no vendor assignments</b>, but ${fmt(curVendors)} are currently published for ${esc(parsed.division)}. Add the RE2 vendor-assignments file, or check the RE2 file's <b>Division</b> column.</li></ul></div>` : "";
     $("previewBody").innerHTML=`
       <div class="kpis" style="margin:6px 0 12px">
         <div class="kpi"><div class="n">${fmt(parsed.communities.length)}</div><div class="l">Communities</div></div>
@@ -1137,10 +1176,11 @@ async function tryBuildPreview(){
         <div class="kpi"><div class="n">${fmt(parsed.categories.length)}</div><div class="l">Categories</div></div>
         <div class="kpi"><div class="n">${fmt((parsed.startRecords||[]).length)}</div><div class="l">Start records</div></div>
       </div>
-      ${diffHtml}${infoHtml}${warnHtml}
+      ${diffHtml}${infoHtml}${warnHtml}${blockHtml}
       <p class="tiny" style="text-align:left">Sources: ${uploadFiles.re2?esc(uploadFiles.re2.name):"<i>no RE2 file</i>"} · ${uploadFiles.starts?esc(uploadFiles.starts.name):"<i>no starts file</i>"}</p>
-      <button class="btn${warns.length?' ghost':''}" id="publishBtn">Publish — replace ${esc($("adminDiv").selectedOptions[0].text)} data</button>`;
+      <button class="btn${(warns.length||blocked)?' ghost':''}" id="publishBtn"${blocked?" disabled":""}>Publish — replace ${esc(parsed.division)} data</button>`;
     $("publishBtn").addEventListener("click",()=>{
+      if(blocked) return;
       const strip=w=>w.replace(/<[^>]+>/g,"");
       const msg="Replace ALL "+parsed.division+" data?\n\n"
         +(diff?`Communities: +${diff.commsAdded} / -${diff.commsRemoved}\nAssignments: +${diff.assignmentsAdded} / -${diff.assignmentsRemoved}\nVendors: +${diff.vendorsAdded} / -${diff.vendorsRemoved}\n`:"First upload for this division.\n")
@@ -1148,7 +1188,9 @@ async function tryBuildPreview(){
         +"\nThis overwrites the current data and cannot be undone.";
       if(confirm(msg)) publish(parsed,key);
     });
-    adminMsg(warns.length?"Preview ready — please review the warnings before publishing.":"Preview ready. Review the changes, then Publish.", warns.length?"info":"ok");
+    adminMsg(blocked?"Publishing is blocked — this upload would leave "+parsed.division+" with no vendor assignments."
+      :warns.length?"Preview ready — please review the warnings before publishing.":"Preview ready. Review the changes, then Publish.",
+      blocked?"err":warns.length?"info":"ok");
   } catch(e){ adminMsg("Parse error: "+e.message,"err"); }
 }
 
@@ -1162,7 +1204,7 @@ function fixRange(ws){
 }
 
 /* Build a division payload from raw RE2 + starts workbooks (mirrors the pipeline). */
-function buildDivision(key, re2wb, startswb){
+function buildDivision(key, re2wb, startswb, current){
   const label=(CFG.DIVISIONS.find(d=>d.key===key)||{}).label||key;
   const digits=x=>String(x==null?"":x).replace(/\D/g,"");
   const S=s=>(s==null?null:String(s).trim()||null);
@@ -1214,7 +1256,7 @@ function buildDivision(key, re2wb, startswb){
   // ---- vendors from RE2 ----
   let vendors=[], communities=[], categories=[];
   const commSet=new Map(); // id -> name
-  const diag={divCounts:{},unmatched:new Set(),re2Rows:0,code:(CFG.DIVISIONS.find(d=>d.key===key)||{}).code||key.toUpperCase()};
+  const diag={divCounts:{},unmatched:new Set(),re2Rows:0,blankDiv:0,code:(CFG.DIVISIONS.find(d=>d.key===key)||{}).code||key.toUpperCase()};
   if (re2wb){
     const rows=XLSX.utils.sheet_to_json(fixRange(re2wb.Sheets[firstSheet(re2wb)]),{defval:null});
     const code=diag.code;
@@ -1222,7 +1264,11 @@ function buildDivision(key, re2wb, startswb){
     const groups=new Map(); // cat|vendor -> {cat,vendor,tradeCode,bill?,comms:Set}
     for (const r of rows){
       const div=S(r["Division"]); diag.re2Rows++; if(div) diag.divCounts[div.toUpperCase()]=(diag.divCounts[div.toUpperCase()]||0)+1;
-      if (div && code && div.toUpperCase()!==code.toUpperCase()) continue;
+      /* A blank Division used to sail past this filter and be imported into whichever
+         division was selected — an export missing the column would land wholesale in
+         the wrong place. Skip them, and count them so the preview can say so. */
+      if (!div){ diag.blankDiv++; continue; }
+      if (code && div.toUpperCase()!==code.toUpperCase()) continue;
       const vendor=S(r["Supplier Desc"]); const cat=S(r["Trade Desc."])||S(r["Trade Desc"]);
       if(!vendor||!cat||cat===".") continue;
       const exp=xlDate(r["Expired Date"]); if(exp && exp<today) continue; // skip expired
@@ -1241,8 +1287,11 @@ function buildDivision(key, re2wb, startswb){
     categories=[...new Set(vendors.map(v=>v.category))].sort();
   } else {
     // keep existing vendor matrix (RE2 not uploaded this time)
-    const cur=state.cache[key];
-    if(cur){ vendors=cur.vendors; categories=cur.categories; cur.communities.forEach(c=>{ if(c.id) commSet.set(digits(c.id).slice(0,7)+"0000"||c.id,c.name); else commSet.set(c.name,c.name); }); }
+    const cur=current||state.cache[key];
+    if(cur){ vendors=cur.vendors; categories=cur.categories;
+      cur.communities.forEach(c=>{ if(!c.id){ commSet.set(c.name,c.name); return; }
+        // a non-numeric id has no 7-digit community prefix to normalise — key it as-is
+        const dg=digits(c.id); commSet.set(dg?dg.slice(0,7)+"0000":c.id, c.name); }); }
   }
 
   // ---- union communities: assignment comms ∪ starts comms ----
@@ -1257,7 +1306,7 @@ function buildDivision(key, re2wb, startswb){
                                    max:startRecords.reduce((a,b)=>b.date>a?b.date:a,startRecords[0].date)} : null;
   return {division:label,code:(CFG.DIVISIONS.find(d=>d.key===key)||{}).code||key.toUpperCase(),key,
           communities,categories,vendors,startRecords,startsDateRange:dr,
-          _diag:{divCounts:diag.divCounts,unmatched:[...diag.unmatched],re2Rows:diag.re2Rows,code:diag.code}};
+          _diag:{divCounts:diag.divCounts,unmatched:[...diag.unmatched],re2Rows:diag.re2Rows,blankDiv:diag.blankDiv,code:diag.code}};
 }
 function cleanCommName(desc){ if(!desc) return null; // strip plan/parenthetical suffixes
   return desc.replace(/\(.*?\)/g,"").replace(/[-*].*$/,"").trim()||null; }
@@ -1286,7 +1335,10 @@ function diffPayload(prev,next){
     assignDelta:np.size-pp.size};
 }
 
+/* Client-side depth only — RLS in the database is what actually enforces this. */
+function divLabelOf(key){ return (CFG.DIVISIONS.find(d=>d.key===key)||{}).label||key; }
 async function publish(parsed,key){
+  if(!canEdit(key)){ alert("You don't have permission to publish "+divLabelOf(key)+"."); return; }
   if (DEMO){ adminMsg("Demo mode: parsing works, but publishing needs the Supabase backend (see SETUP.md). Nothing was saved.","info"); return; }
   adminMsg("Publishing…","info");
   delete parsed._diag;
@@ -1302,9 +1354,12 @@ async function publish(parsed,key){
     const sign = summary.assignDelta>=0 ? "+" : "";
     adminMsg("Published. "+parsed.division+" replaced. Assignments "+sign+summary.assignDelta+", +"+summary.vendorsAdded+"/-"+summary.vendorsRemoved+" vendors.","ok");
     renderRollback(key);
+    // the dashboard behind the admin panel is still showing the pre-publish payload
+    if(state.divKey===key) await loadDivision(key);
   } catch(e){ adminMsg("Publish failed: "+e.message,"err"); }
 }
 async function revertDivision(key){
+  if(!canEdit(key)){ alert("You don't have permission to revert "+divLabelOf(key)+"."); return; }
   if(DEMO||!sb) return;
   adminMsg("Reverting…","info");
   try{
@@ -1320,6 +1375,7 @@ async function revertDivision(key){
     delete state.cache[key];
     adminMsg("Reverted "+label+" to the previous version.","ok");
     renderRollback(key);
+    if(state.divKey===key) await loadDivision(key);
   }catch(e){ adminMsg("Revert failed: "+e.message,"err"); }
 }
 async function renderRollback(key){
