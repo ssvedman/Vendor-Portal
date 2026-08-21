@@ -24,7 +24,7 @@ if (!DEMO && window.supabase) {
 const state = { email:null, role:"viewer", roleDivs:[], divKey:null, data:null,
                 view:"community", cache:{}, range:{...CFG.DEFAULT_RANGE}, coreFrac:0.5 };
 const $  = id => document.getElementById(id);
-const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt = n => (n==null||isNaN(n))?"—":Number(n).toLocaleString();
 const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 (function(){ try{ const t=localStorage.getItem("vp_theme"); if(t) document.documentElement.setAttribute("data-theme",t);
